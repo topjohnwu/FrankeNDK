@@ -1,0 +1,5 @@
+#!/buildbot/src/android/ndk-release-r17/out/python/windows-x86_64/install/host-tools/bin/python2.7.exe
+
+import pydoc
+if __name__ == '__main__':
+    pydoc.cli()
