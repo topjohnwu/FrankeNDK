@@ -1,8 +1,8 @@
 # FrankeNDK
 
-*Support SDK: 14 - 28*
-*Host Platform: Linux, macOS, Windows*
-*Host Arch: x86_64*
+*Support SDK: 14 - 28*  
+*Host Platform: Linux, macOS, Windows*  
+*Host Arch: x86_64*  
 *Target Arch: ARMv7, ARM64, x86, x86_64 (64 bit only on SDK 21+)*
 
 ## Downloads
