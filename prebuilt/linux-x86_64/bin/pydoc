@@ -1,4 +1,4 @@
-#!/buildbot/src/android/ndk-release-r17/out/python/linux-x86_64/install/host-tools/bin/python2.7
+#!/usr/local/google/buildbot/src/android/ndk-release-r17/out/python/linux-x86_64/install/host-tools/bin/python2.7
 
 import pydoc
 if __name__ == '__main__':
