@@ -305,15 +305,17 @@ void constructor_tests()
         using RetT = decltype(std::not_fn(value));
         static_assert(std::is_move_constructible<RetT>::value, "");
         static_assert(std::is_copy_constructible<RetT>::value, "");
-        static_assert(std::is_move_assignable<RetT>::value, "");
-        static_assert(std::is_copy_assignable<RetT>::value, "");
+        LIBCPP_STATIC_ASSERT(std::is_move_assignable<RetT>::value, "");
+        LIBCPP_STATIC_ASSERT(std::is_copy_assignable<RetT>::value, "");
         auto ret = std::not_fn(value);
         assert(ret() == false);
         auto ret2 = std::not_fn(value2);
         assert(ret2() == true);
+#if defined(_LIBCPP_VERSION)
         ret = ret2;
         assert(ret() == true);
         assert(ret2() == true);
+#endif // _LIBCPP_VERSION
     }
     {
         using T = MoveAssignableWrapper;
@@ -322,14 +324,16 @@ void constructor_tests()
         using RetT = decltype(std::not_fn(std::move(value)));
         static_assert(std::is_move_constructible<RetT>::value, "");
         static_assert(!std::is_copy_constructible<RetT>::value, "");
-        static_assert(std::is_move_assignable<RetT>::value, "");
+        LIBCPP_STATIC_ASSERT(std::is_move_assignable<RetT>::value, "");
         static_assert(!std::is_copy_assignable<RetT>::value, "");
         auto ret = std::not_fn(std::move(value));
         assert(ret() == false);
         auto ret2 = std::not_fn(std::move(value2));
         assert(ret2() == true);
+#if defined(_LIBCPP_VERSION)
         ret = std::move(ret2);
         assert(ret() == true);
+#endif // _LIBCPP_VERSION
     }
 }
 
@@ -426,7 +430,7 @@ void throws_in_constructor_test()
     {
         ThrowsOnCopy cp;
         try {
-            std::not_fn(cp);
+            (void)std::not_fn(cp);
             assert(false);
         } catch (int const& value) {
             assert(value == 42);
@@ -438,26 +442,26 @@ void throws_in_constructor_test()
 void call_operator_sfinae_test() {
     { // wrong number of arguments
         using T = decltype(std::not_fn(returns_true));
-        static_assert(std::is_callable<T()>::value, ""); // callable only with no args
-        static_assert(!std::is_callable<T(bool)>::value, "");
+        static_assert(std::is_invocable<T>::value, ""); // callable only with no args
+        static_assert(!std::is_invocable<T, bool>::value, "");
     }
     { // violates const correctness (member function pointer)
         using T = decltype(std::not_fn(&MemFunCallable::return_value_nc));
-        static_assert(std::is_callable<T(MemFunCallable&)>::value, "");
-        static_assert(!std::is_callable<T(const MemFunCallable&)>::value, "");
+        static_assert(std::is_invocable<T, MemFunCallable&>::value, "");
+        static_assert(!std::is_invocable<T, const MemFunCallable&>::value, "");
     }
     { // violates const correctness (call object)
         using Obj = CopyCallable<bool>;
         using NCT = decltype(std::not_fn(Obj{true}));
         using CT = const NCT;
-        static_assert(std::is_callable<NCT()>::value, "");
-        static_assert(!std::is_callable<CT()>::value, "");
+        static_assert(std::is_invocable<NCT>::value, "");
+        static_assert(!std::is_invocable<CT>::value, "");
     }
     { // returns bad type with no operator!
         auto fn = [](auto x) { return x; };
         using T = decltype(std::not_fn(fn));
-        static_assert(std::is_callable<T(bool)>::value, "");
-        static_assert(!std::is_callable<T(std::string)>::value, "");
+        static_assert(std::is_invocable<T, bool>::value, "");
+        static_assert(!std::is_invocable<T, std::string>::value, "");
     }
 }
 
@@ -587,7 +591,7 @@ void call_operator_noexcept_test()
 }
 
 void test_lwg2767() {
-    // See http://wg21.link/LWG2767
+    // See https://cplusplus.github.io/LWG/lwg-defects.html#2767
     struct Abstract { virtual void f() const = 0; };
     struct Derived : public Abstract { void f() const {} };
     struct F { bool operator()(Abstract&&) { return false; } };

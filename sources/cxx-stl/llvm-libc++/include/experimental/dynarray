@@ -133,19 +133,20 @@ public:
 private:
     size_t                  __size_;
     value_type *            __base_;
-    _LIBCPP_ALWAYS_INLINE dynarray () noexcept :  __size_(0), __base_(nullptr) {}
+    _LIBCPP_INLINE_VISIBILITY dynarray () noexcept :  __size_(0), __base_(nullptr) {}
     
-    static inline _LIBCPP_INLINE_VISIBILITY value_type* __allocate ( size_t count )
-    {
-        if ( numeric_limits<size_t>::max() / sizeof (value_type) <= count )
+    static inline _LIBCPP_INLINE_VISIBILITY
+    value_type* __allocate(size_t __count) {
+        if (numeric_limits<size_t>::max() / sizeof (value_type) <= __count)
             __throw_bad_array_length();
 
-        return static_cast<value_type *> (_VSTD::__allocate (sizeof(value_type) * count));
+        return static_cast<value_type *>(
+            _VSTD::__libcpp_allocate(sizeof(value_type) * __count, __alignof(value_type)));
     }
 
-    static inline _LIBCPP_INLINE_VISIBILITY void __deallocate_value( value_type* __ptr ) noexcept
-    {
-        _VSTD::__libcpp_deallocate (static_cast<void *> (__ptr));
+    static inline _LIBCPP_INLINE_VISIBILITY
+    void __deallocate_value(value_type* __ptr, size_t __count) noexcept {
+        _VSTD::__libcpp_deallocate(static_cast<void *>(__ptr), sizeof(value_type) * __count, __alignof(value_type));
     }
 
 public:
@@ -265,7 +266,7 @@ dynarray<_Tp>::~dynarray()
     value_type *__data = data () + __size_;
     for ( size_t i = 0; i < __size_; ++i )
         (--__data)->value_type::~value_type();
-    __deallocate_value( __base_ );
+    __deallocate_value(__base_, __size_);
 }
 
 template <class _Tp>

@@ -10,6 +10,7 @@
 // test operator new nothrow by replacing only operator new
 
 // UNSUPPORTED: sanitizer-new-delete
+// XFAIL: libcpp-no-vcruntime
 
 #include <new>
 #include <cstddef>
@@ -28,17 +29,17 @@ struct A
     ~A() {A_constructed = false;}
 };
 
-A* volatile ap;
-
 int main()
 {
     globalMemCounter.reset();
     assert(globalMemCounter.checkOutstandingNewEq(0));
-    ap = new (std::nothrow) A;
+    A *ap = new (std::nothrow) A;
+    DoNotOptimize(ap);
     assert(ap);
     assert(A_constructed);
     assert(globalMemCounter.checkOutstandingNewNotEq(0));
     delete ap;
+    DoNotOptimize(ap);
     assert(!A_constructed);
     assert(globalMemCounter.checkOutstandingNewEq(0));
 }

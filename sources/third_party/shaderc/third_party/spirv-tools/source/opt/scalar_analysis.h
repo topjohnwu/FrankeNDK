@@ -20,19 +20,18 @@
 #include <map>
 #include <memory>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
-#include "opt/basic_block.h"
-#include "opt/instruction.h"
-#include "opt/scalar_analysis_nodes.h"
+#include "source/opt/basic_block.h"
+#include "source/opt/instruction.h"
+#include "source/opt/scalar_analysis_nodes.h"
 
 namespace spvtools {
-namespace ir {
+namespace opt {
+
 class IRContext;
 class Loop;
-}  // namespace ir
-
-namespace opt {
 
 // Manager for the Scalar Evolution analysis. Creates and maintains a DAG of
 // scalar operations generated from analysing the use def graph from incoming
@@ -42,7 +41,7 @@ namespace opt {
 // usable form with SimplifyExpression.
 class ScalarEvolutionAnalysis {
  public:
-  explicit ScalarEvolutionAnalysis(ir::IRContext* context);
+  explicit ScalarEvolutionAnalysis(IRContext* context);
 
   // Create a unary negative node on |operand|.
   SENode* CreateNegation(SENode* operand);
@@ -63,18 +62,18 @@ class ScalarEvolutionAnalysis {
   SENode* CreateConstant(int64_t integer);
 
   // Create a value unknown node, such as a load.
-  SENode* CreateValueUnknownNode(const ir::Instruction* inst);
+  SENode* CreateValueUnknownNode(const Instruction* inst);
 
   // Create a CantComputeNode. Used to exit out of analysis.
   SENode* CreateCantComputeNode();
 
   // Create a new recurrent node with |offset| and |coefficient|, with respect
   // to |loop|.
-  SENode* CreateRecurrentExpression(const ir::Loop* loop, SENode* offset,
+  SENode* CreateRecurrentExpression(const Loop* loop, SENode* offset,
                                     SENode* coefficient);
 
   // Construct the DAG by traversing use def chain of |inst|.
-  SENode* AnalyzeInstruction(const ir::Instruction* inst);
+  SENode* AnalyzeInstruction(const Instruction* inst);
 
   // Simplify the |node| by grouping like terms or if contains a recurrent
   // expression, rewrite the graph so the whole DAG (from |node| down) is in
@@ -93,7 +92,7 @@ class ScalarEvolutionAnalysis {
   SENode* GetCachedOrAdd(std::unique_ptr<SENode> prospective_node);
 
   // Checks that the graph starting from |node| is invariant to the |loop|.
-  bool IsLoopInvariant(const ir::Loop* loop, const SENode* node) const;
+  bool IsLoopInvariant(const Loop* loop, const SENode* node) const;
 
   // Sets |is_gt_zero| to true if |node| represent a value always strictly
   // greater than 0. The result of |is_gt_zero| is valid only if the function
@@ -108,37 +107,45 @@ class ScalarEvolutionAnalysis {
   // |node| and return the coefficient of that recurrent term. Constant zero
   // will be returned if no recurrent could be found. |node| should be in
   // simplest form.
-  SENode* GetCoefficientFromRecurrentTerm(SENode* node, const ir::Loop* loop);
+  SENode* GetCoefficientFromRecurrentTerm(SENode* node, const Loop* loop);
 
   // Return a rebuilt graph starting from |node| with the recurrent expression
   // belonging to |loop| being zeroed out. Returned node will be simplified.
-  SENode* BuildGraphWithoutRecurrentTerm(SENode* node, const ir::Loop* loop);
+  SENode* BuildGraphWithoutRecurrentTerm(SENode* node, const Loop* loop);
 
   // Return the recurrent term belonging to |loop| if it appears in the graph
   // starting at |node| or null if it doesn't.
-  SERecurrentNode* GetRecurrentTerm(SENode* node, const ir::Loop* loop);
+  SERecurrentNode* GetRecurrentTerm(SENode* node, const Loop* loop);
 
   SENode* UpdateChildNode(SENode* parent, SENode* child, SENode* new_child);
 
+  // The loops in |loop_pair| will be considered the same when constructing
+  // SERecurrentNode objects. This enables analysing dependencies that will be
+  // created during loop fusion.
+  void AddLoopsToPretendAreTheSame(
+      const std::pair<const Loop*, const Loop*>& loop_pair) {
+    pretend_equal_[std::get<1>(loop_pair)] = std::get<0>(loop_pair);
+  }
+
  private:
-  SENode* AnalyzeConstant(const ir::Instruction* inst);
+  SENode* AnalyzeConstant(const Instruction* inst);
 
   // Handles both addition and subtraction. If the |instruction| is OpISub
   // then the resulting node will be op1+(-op2) otherwise if it is OpIAdd then
   // the result will be op1+op2. |instruction| must be OpIAdd or OpISub.
-  SENode* AnalyzeAddOp(const ir::Instruction* instruction);
+  SENode* AnalyzeAddOp(const Instruction* instruction);
 
-  SENode* AnalyzeMultiplyOp(const ir::Instruction* multiply);
+  SENode* AnalyzeMultiplyOp(const Instruction* multiply);
 
-  SENode* AnalyzePhiInstruction(const ir::Instruction* phi);
+  SENode* AnalyzePhiInstruction(const Instruction* phi);
 
-  ir::IRContext* context_;
+  IRContext* context_;
 
   // A map of instructions to SENodes. This is used to track recurrent
   // expressions as they are added when analyzing instructions. Recurrent
   // expressions come from phi nodes which by nature can include recursion so we
   // check if nodes have already been built when analyzing instructions.
-  std::map<const ir::Instruction*, SENode*> recurrent_node_map_;
+  std::map<const Instruction*, SENode*> recurrent_node_map_;
 
   // On creation we create and cache the CantCompute node so we not need to
   // perform a needless create step.
@@ -158,6 +165,10 @@ class ScalarEvolutionAnalysis {
   // managed by they set.
   std::unordered_set<std::unique_ptr<SENode>, SENodeHash, NodePointersEquality>
       node_cache_;
+
+  // Loops that should be considered the same for performing analysis for loop
+  // fusion.
+  std::map<const Loop*, const Loop*> pretend_equal_;
 };
 
 // Wrapping class to manipulate SENode pointer using + - * / operators.
@@ -270,10 +281,12 @@ inline SExpression operator+(SENode* lhs, SExpression rhs) { return rhs + lhs; }
 template <typename T,
           typename std::enable_if<std::is_integral<T>::value, int>::type>
 inline SExpression operator-(T lhs, SExpression rhs) {
+  // NOLINTNEXTLINE(whitespace/braces)
   return SExpression{rhs.GetScalarEvolutionAnalysis()->CreateConstant(lhs)} -
          rhs;
 }
 inline SExpression operator-(SENode* lhs, SExpression rhs) {
+  // NOLINTNEXTLINE(whitespace/braces)
   return SExpression{lhs} - rhs;
 }
 
@@ -287,13 +300,15 @@ inline SExpression operator*(SENode* lhs, SExpression rhs) { return rhs * lhs; }
 template <typename T,
           typename std::enable_if<std::is_integral<T>::value, int>::type>
 inline std::pair<SExpression, int64_t> operator/(T lhs, SExpression rhs) {
+  // NOLINTNEXTLINE(whitespace/braces)
   return SExpression{rhs.GetScalarEvolutionAnalysis()->CreateConstant(lhs)} /
          rhs;
 }
 inline std::pair<SExpression, int64_t> operator/(SENode* lhs, SExpression rhs) {
+  // NOLINTNEXTLINE(whitespace/braces)
   return SExpression{lhs} / rhs;
 }
 
 }  // namespace opt
 }  // namespace spvtools
-#endif  // SOURCE_OPT_SCALAR_ANALYSIS_H__
+#endif  // SOURCE_OPT_SCALAR_ANALYSIS_H_

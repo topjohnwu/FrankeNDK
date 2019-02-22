@@ -10,6 +10,7 @@
 // test operator new[] replacement by replacing only operator new
 
 // UNSUPPORTED: sanitizer-new-delete
+// XFAIL: libcpp-no-vcruntime
 
 
 #include <new>
@@ -29,17 +30,17 @@ struct A
     ~A() {--A_constructed;}
 };
 
-A* volatile ap;
-
 int main()
 {
     globalMemCounter.reset();
     assert(globalMemCounter.checkOutstandingNewEq(0));
-    ap = new A[3];
+    A *ap = new A[3];
+    DoNotOptimize(ap);
     assert(ap);
     assert(A_constructed == 3);
     assert(globalMemCounter.checkOutstandingNewEq(1));
     delete [] ap;
+    DoNotOptimize(ap);
     assert(A_constructed == 0);
     assert(globalMemCounter.checkOutstandingNewEq(0));
 }

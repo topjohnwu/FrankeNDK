@@ -14,11 +14,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "local_single_store_elim_pass.h"
+#include "source/opt/local_single_store_elim_pass.h"
 
-#include "cfa.h"
-#include "iterator.h"
-#include "latest_version_glsl_std_450_header.h"
+#include "source/cfa.h"
+#include "source/latest_version_glsl_std_450_header.h"
+#include "source/opt/iterator.h"
 
 namespace spvtools {
 namespace opt {
@@ -30,12 +30,12 @@ const uint32_t kVariableInitIdInIdx = 1;
 
 }  // anonymous namespace
 
-bool LocalSingleStoreElimPass::LocalSingleStoreElim(ir::Function* func) {
+bool LocalSingleStoreElimPass::LocalSingleStoreElim(Function* func) {
   bool modified = false;
 
   // Check all function scope variables in |func|.
-  ir::BasicBlock* entry_block = &*func->begin();
-  for (ir::Instruction& inst : *entry_block) {
+  BasicBlock* entry_block = &*func->begin();
+  for (Instruction& inst : *entry_block) {
     if (inst.opcode() != SpvOpVariable) {
       break;
     }
@@ -43,11 +43,6 @@ bool LocalSingleStoreElimPass::LocalSingleStoreElim(ir::Function* func) {
     modified |= ProcessVariable(&inst);
   }
   return modified;
-}
-
-void LocalSingleStoreElimPass::Initialize(ir::IRContext* irContext) {
-  InitializeProcessing(irContext);
-  InitExtensionWhiteList();
 }
 
 bool LocalSingleStoreElimPass::AllExtensionsSupported() const {
@@ -69,17 +64,17 @@ Pass::Status LocalSingleStoreElimPass::ProcessImpl() {
   // Do not process if any disallowed extensions are enabled
   if (!AllExtensionsSupported()) return Status::SuccessWithoutChange;
   // Process all entry point functions
-  ProcessFunction pfn = [this](ir::Function* fp) {
+  ProcessFunction pfn = [this](Function* fp) {
     return LocalSingleStoreElim(fp);
   };
   bool modified = ProcessEntryPointCallTree(pfn, get_module());
   return modified ? Status::SuccessWithChange : Status::SuccessWithoutChange;
 }
 
-LocalSingleStoreElimPass::LocalSingleStoreElimPass() {}
+LocalSingleStoreElimPass::LocalSingleStoreElimPass() = default;
 
-Pass::Status LocalSingleStoreElimPass::Process(ir::IRContext* irContext) {
-  Initialize(irContext);
+Pass::Status LocalSingleStoreElimPass::Process() {
+  InitExtensionWhiteList();
   return ProcessImpl();
 }
 
@@ -118,13 +113,19 @@ void LocalSingleStoreElimPass::InitExtensionWhiteList() {
       "SPV_GOOGLE_hlsl_functionality1",
       "SPV_NV_shader_subgroup_partitioned",
       "SPV_EXT_descriptor_indexing",
+      "SPV_NV_fragment_shader_barycentric",
+      "SPV_NV_compute_shader_derivatives",
+      "SPV_NV_shader_image_footprint",
+      "SPV_NV_shading_rate",
+      "SPV_NV_mesh_shader",
+      "SPV_NVX_raytracing",
   });
 }
-bool LocalSingleStoreElimPass::ProcessVariable(ir::Instruction* var_inst) {
-  vector<ir::Instruction*> users;
+bool LocalSingleStoreElimPass::ProcessVariable(Instruction* var_inst) {
+  std::vector<Instruction*> users;
   FindUses(var_inst, &users);
 
-  ir::Instruction* store_inst = FindSingleStoreAndCheckUses(var_inst, users);
+  Instruction* store_inst = FindSingleStoreAndCheckUses(var_inst, users);
 
   if (store_inst == nullptr) {
     return false;
@@ -133,17 +134,17 @@ bool LocalSingleStoreElimPass::ProcessVariable(ir::Instruction* var_inst) {
   return RewriteLoads(store_inst, users);
 }
 
-ir::Instruction* LocalSingleStoreElimPass::FindSingleStoreAndCheckUses(
-    ir::Instruction* var_inst, const vector<ir::Instruction*>& users) const {
+Instruction* LocalSingleStoreElimPass::FindSingleStoreAndCheckUses(
+    Instruction* var_inst, const std::vector<Instruction*>& users) const {
   // Make sure there is exactly 1 store.
-  ir::Instruction* store_inst = nullptr;
+  Instruction* store_inst = nullptr;
 
   // If |var_inst| has an initializer, then that will count as a store.
   if (var_inst->NumInOperands() > 1) {
     store_inst = var_inst;
   }
 
-  for (ir::Instruction* user : users) {
+  for (Instruction* user : users) {
     switch (user->opcode()) {
       case SpvOpStore:
         // Since we are in the relaxed addressing mode, the use has to be the
@@ -182,10 +183,9 @@ ir::Instruction* LocalSingleStoreElimPass::FindSingleStoreAndCheckUses(
 }
 
 void LocalSingleStoreElimPass::FindUses(
-    const ir::Instruction* var_inst,
-    std::vector<ir::Instruction*>* users) const {
+    const Instruction* var_inst, std::vector<Instruction*>* users) const {
   analysis::DefUseManager* def_use_mgr = context()->get_def_use_mgr();
-  def_use_mgr->ForEachUser(var_inst, [users, this](ir::Instruction* user) {
+  def_use_mgr->ForEachUser(var_inst, [users, this](Instruction* user) {
     users->push_back(user);
     if (user->opcode() == SpvOpCopyObject) {
       FindUses(user, users);
@@ -193,9 +193,9 @@ void LocalSingleStoreElimPass::FindUses(
   });
 }
 
-bool LocalSingleStoreElimPass::FeedsAStore(ir::Instruction* inst) const {
+bool LocalSingleStoreElimPass::FeedsAStore(Instruction* inst) const {
   analysis::DefUseManager* def_use_mgr = context()->get_def_use_mgr();
-  return !def_use_mgr->WhileEachUser(inst, [this](ir::Instruction* user) {
+  return !def_use_mgr->WhileEachUser(inst, [this](Instruction* user) {
     switch (user->opcode()) {
       case SpvOpStore:
         return false;
@@ -216,9 +216,9 @@ bool LocalSingleStoreElimPass::FeedsAStore(ir::Instruction* inst) const {
 }
 
 bool LocalSingleStoreElimPass::RewriteLoads(
-    ir::Instruction* store_inst, const std::vector<ir::Instruction*>& uses) {
-  ir::BasicBlock* store_block = context()->get_instr_block(store_inst);
-  opt::DominatorAnalysis* dominator_analysis =
+    Instruction* store_inst, const std::vector<Instruction*>& uses) {
+  BasicBlock* store_block = context()->get_instr_block(store_inst);
+  DominatorAnalysis* dominator_analysis =
       context()->GetDominatorAnalysis(store_block->GetParent());
 
   uint32_t stored_id;
@@ -227,9 +227,9 @@ bool LocalSingleStoreElimPass::RewriteLoads(
   else
     stored_id = store_inst->GetSingleWordInOperand(kVariableInitIdInIdx);
 
-  std::vector<ir::Instruction*> uses_in_store_block;
+  std::vector<Instruction*> uses_in_store_block;
   bool modified = false;
-  for (ir::Instruction* use : uses) {
+  for (Instruction* use : uses) {
     if (use->opcode() == SpvOpLoad) {
       if (dominator_analysis->Dominates(store_inst, use)) {
         modified = true;

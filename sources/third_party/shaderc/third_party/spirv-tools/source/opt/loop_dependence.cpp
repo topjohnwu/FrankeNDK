@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "opt/loop_dependence.h"
+#include "source/opt/loop_dependence.h"
 
 #include <functional>
 #include <memory>
@@ -21,9 +21,9 @@
 #include <utility>
 #include <vector>
 
-#include "opt/instruction.h"
-#include "opt/scalar_analysis.h"
-#include "opt/scalar_analysis_nodes.h"
+#include "source/opt/instruction.h"
+#include "source/opt/scalar_analysis.h"
+#include "source/opt/scalar_analysis_nodes.h"
 
 namespace spvtools {
 namespace opt {
@@ -181,22 +181,71 @@ bool NormalizeAndCompareFractions(int64_t numerator_0, int64_t denominator_0,
 
 }  // namespace
 
-bool LoopDependenceAnalysis::GetDependence(const ir::Instruction* source,
-                                           const ir::Instruction* destination,
+bool LoopDependenceAnalysis::GetDependence(const Instruction* source,
+                                           const Instruction* destination,
                                            DistanceVector* distance_vector) {
   // Start off by finding and marking all the loops in |loops_| that are
   // irrelevant to the dependence analysis.
   MarkUnsusedDistanceEntriesAsIrrelevant(source, destination, distance_vector);
 
-  ir::Instruction* source_access_chain = GetOperandDefinition(source, 0);
-  ir::Instruction* destination_access_chain =
-      GetOperandDefinition(destination, 0);
+  Instruction* source_access_chain = GetOperandDefinition(source, 0);
+  Instruction* destination_access_chain = GetOperandDefinition(destination, 0);
+
+  auto num_access_chains =
+      (source_access_chain->opcode() == SpvOpAccessChain) +
+      (destination_access_chain->opcode() == SpvOpAccessChain);
+
+  // If neither is an access chain, then they are load/store to a variable.
+  if (num_access_chains == 0) {
+    if (source_access_chain != destination_access_chain) {
+      // Not the same location, report independence
+      return true;
+    } else {
+      // Accessing the same variable
+      for (auto& entry : distance_vector->GetEntries()) {
+        entry = DistanceEntry();
+      }
+      return false;
+    }
+  }
+
+  // If only one is an access chain, it could be accessing a part of a struct
+  if (num_access_chains == 1) {
+    auto source_is_chain = source_access_chain->opcode() == SpvOpAccessChain;
+    auto access_chain =
+        source_is_chain ? source_access_chain : destination_access_chain;
+    auto variable =
+        source_is_chain ? destination_access_chain : source_access_chain;
+
+    auto location_in_chain = GetOperandDefinition(access_chain, 0);
+
+    if (variable != location_in_chain) {
+      // Not the same location, report independence
+      return true;
+    } else {
+      // Accessing the same variable
+      for (auto& entry : distance_vector->GetEntries()) {
+        entry = DistanceEntry();
+      }
+      return false;
+    }
+  }
 
   // If the access chains aren't collecting from the same structure there is no
   // dependence.
-  ir::Instruction* source_array = GetOperandDefinition(source_access_chain, 0);
-  ir::Instruction* destination_array =
+  Instruction* source_array = GetOperandDefinition(source_access_chain, 0);
+  Instruction* destination_array =
       GetOperandDefinition(destination_access_chain, 0);
+
+  // Nested access chains are not supported yet, bail out.
+  if (source_array->opcode() == SpvOpAccessChain ||
+      destination_array->opcode() == SpvOpAccessChain) {
+    for (auto& entry : distance_vector->GetEntries()) {
+      entry = DistanceEntry();
+    }
+    return false;
+  }
+
   if (source_array != destination_array) {
     PrintDebug("Proved independence through different arrays.");
     return true;
@@ -204,16 +253,15 @@ bool LoopDependenceAnalysis::GetDependence(const ir::Instruction* source,
 
   // To handle multiple subscripts we must get every operand in the access
   // chains past the first.
-  std::vector<ir::Instruction*> source_subscripts = GetSubscripts(source);
-  std::vector<ir::Instruction*> destination_subscripts =
-      GetSubscripts(destination);
+  std::vector<Instruction*> source_subscripts = GetSubscripts(source);
+  std::vector<Instruction*> destination_subscripts = GetSubscripts(destination);
 
   auto sets_of_subscripts =
       PartitionSubscripts(source_subscripts, destination_subscripts);
 
   auto first_coupled = std::partition(
       std::begin(sets_of_subscripts), std::end(sets_of_subscripts),
-      [](const std::set<std::pair<ir::Instruction*, ir::Instruction*>>& set) {
+      [](const std::set<std::pair<Instruction*, Instruction*>>& set) {
         return set.size() == 1;
       });
 
@@ -234,7 +282,7 @@ bool LoopDependenceAnalysis::GetDependence(const ir::Instruction* source,
     // Check the loops are in a form we support.
     auto subscript_pair = std::make_pair(source_node, destination_node);
 
-    const ir::Loop* loop = GetLoopForSubscriptPair(subscript_pair);
+    const Loop* loop = GetLoopForSubscriptPair(subscript_pair);
     if (loop) {
       if (!IsSupportedLoop(loop)) {
         PrintDebug(
@@ -323,7 +371,7 @@ bool LoopDependenceAnalysis::GetDependence(const ir::Instruction* source,
 
       auto is_subscript_supported =
           std::all_of(std::begin(loops), std::end(loops),
-                      [this](const ir::Loop* l) { return IsSupportedLoop(l); });
+                      [this](const Loop* l) { return IsSupportedLoop(l); });
 
       supported = supported && is_subscript_supported;
     }
@@ -491,7 +539,7 @@ bool LoopDependenceAnalysis::StrongSIVTest(SENode* source, SENode* destination,
   // Build an SENode for distance.
   std::pair<SENode*, SENode*> subscript_pair =
       std::make_pair(source, destination);
-  const ir::Loop* subscript_loop = GetLoopForSubscriptPair(subscript_pair);
+  const Loop* subscript_loop = GetLoopForSubscriptPair(subscript_pair);
   SENode* source_constant_term =
       GetConstantTerm(subscript_loop, source->AsSERecurrentNode());
   SENode* destination_constant_term =
@@ -626,7 +674,7 @@ bool LoopDependenceAnalysis::SymbolicStrongSIVTest(
   // outwith the bounds.
   std::pair<SENode*, SENode*> subscript_pair =
       std::make_pair(source, destination);
-  const ir::Loop* subscript_loop = GetLoopForSubscriptPair(subscript_pair);
+  const Loop* subscript_loop = GetLoopForSubscriptPair(subscript_pair);
   if (IsProvablyOutsideOfLoopBounds(subscript_loop, source_destination_delta,
                                     coefficient)) {
     PrintDebug(
@@ -651,7 +699,7 @@ bool LoopDependenceAnalysis::WeakZeroSourceSIVTest(
   PrintDebug("Performing WeakZeroSourceSIVTest.");
   std::pair<SENode*, SENode*> subscript_pair =
       std::make_pair(source, destination);
-  const ir::Loop* subscript_loop = GetLoopForSubscriptPair(subscript_pair);
+  const Loop* subscript_loop = GetLoopForSubscriptPair(subscript_pair);
   // Build an SENode for distance.
   SENode* destination_constant_term =
       GetConstantTerm(subscript_loop, destination);
@@ -805,7 +853,7 @@ bool LoopDependenceAnalysis::WeakZeroDestinationSIVTest(
   // Build an SENode for distance.
   std::pair<SENode*, SENode*> subscript_pair =
       std::make_pair(source, destination);
-  const ir::Loop* subscript_loop = GetLoopForSubscriptPair(subscript_pair);
+  const Loop* subscript_loop = GetLoopForSubscriptPair(subscript_pair);
   SENode* source_constant_term = GetConstantTerm(subscript_loop, source);
   SENode* delta = scalar_evolution_.SimplifyExpression(
       scalar_evolution_.CreateSubtraction(destination, source_constant_term));
@@ -1065,10 +1113,10 @@ bool LoopDependenceAnalysis::GCDMIVTest(
 }
 
 using PartitionedSubscripts =
-    std::vector<std::set<std::pair<ir::Instruction*, ir::Instruction*>>>;
+    std::vector<std::set<std::pair<Instruction*, Instruction*>>>;
 PartitionedSubscripts LoopDependenceAnalysis::PartitionSubscripts(
-    const std::vector<ir::Instruction*>& source_subscripts,
-    const std::vector<ir::Instruction*>& destination_subscripts) {
+    const std::vector<Instruction*>& source_subscripts,
+    const std::vector<Instruction*>& destination_subscripts) {
   PartitionedSubscripts partitions{};
 
   auto num_subscripts = source_subscripts.size();
@@ -1089,8 +1137,7 @@ PartitionedSubscripts LoopDependenceAnalysis::PartitionSubscripts(
       auto it = std::find_if(
           current_partition.begin(), current_partition.end(),
           [loop,
-           this](const std::pair<ir::Instruction*, ir::Instruction*>& elem)
-              -> bool {
+           this](const std::pair<Instruction*, Instruction*>& elem) -> bool {
             auto source_recurrences =
                 scalar_evolution_.AnalyzeInstruction(std::get<0>(elem))
                     ->CollectRecurrentNodes();
@@ -1127,8 +1174,9 @@ PartitionedSubscripts LoopDependenceAnalysis::PartitionSubscripts(
   partitions.erase(
       std::remove_if(
           partitions.begin(), partitions.end(),
-          [](const std::set<std::pair<ir::Instruction*, ir::Instruction*>>&
-                 partition) { return partition.empty(); }),
+          [](const std::set<std::pair<Instruction*, Instruction*>>& partition) {
+            return partition.empty();
+          }),
       partitions.end());
 
   return partitions;

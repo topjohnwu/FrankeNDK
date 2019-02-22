@@ -23,6 +23,7 @@
 
 #include <random>
 #include <cassert>
+#include <system_error>
 
 #include "test_macros.h"
 
@@ -38,7 +39,7 @@ int main()
     try
     {
         std::random_device r("/dev/null");
-        r();
+        (void)r();
         LIBCPP_ASSERT(false);
     }
     catch (const std::system_error&)

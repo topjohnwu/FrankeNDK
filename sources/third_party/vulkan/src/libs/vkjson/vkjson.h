@@ -33,33 +33,93 @@
 #undef max
 #endif
 
+#ifndef VK_API_VERSION_1_0
+#define VK_API_VERSION_1_0 VK_MAKE_VERSION(1, 0, 0)
+#endif
+
+#ifndef VK_API_VERSION_1_1
+#define VK_API_VERSION_1_1 VK_MAKE_VERSION(1, 1, 0)
+#endif
+
 struct VkJsonLayer {
   VkLayerProperties properties;
   std::vector<VkExtensionProperties> extensions;
 };
 
+struct VkJsonExtVariablePointerFeatures {
+  VkJsonExtVariablePointerFeatures() {
+    memset(&variable_pointer_features_khr, 0,
+           sizeof(VkPhysicalDeviceVariablePointerFeaturesKHR));
+  }
+  VkPhysicalDeviceVariablePointerFeaturesKHR variable_pointer_features_khr;
+};
+
 struct VkJsonDevice {
   VkJsonDevice() {
-          memset(&properties, 0, sizeof(VkPhysicalDeviceProperties));
-          memset(&features, 0, sizeof(VkPhysicalDeviceFeatures));
-          memset(&variable_pointer_features, 0,
-                 sizeof(VkPhysicalDeviceVariablePointerFeaturesKHR));
-          memset(&memory, 0, sizeof(VkPhysicalDeviceMemoryProperties));
+    memset(&properties, 0, sizeof(VkPhysicalDeviceProperties));
+    memset(&features, 0, sizeof(VkPhysicalDeviceFeatures));
+    memset(&memory, 0, sizeof(VkPhysicalDeviceMemoryProperties));
+    memset(&subgroup_properties, 0, sizeof(VkPhysicalDeviceSubgroupProperties));
+    memset(&point_clipping_properties, 0,
+           sizeof(VkPhysicalDevicePointClippingProperties));
+    memset(&multiview_properties, 0,
+           sizeof(VkPhysicalDeviceMultiviewProperties));
+    memset(&id_properties, 0, sizeof(VkPhysicalDeviceIDProperties));
+    memset(&maintenance3_properties, 0,
+           sizeof(VkPhysicalDeviceMaintenance3Properties));
+    memset(&bit16_storage_features, 0,
+           sizeof(VkPhysicalDevice16BitStorageFeatures));
+    memset(&multiview_features, 0, sizeof(VkPhysicalDeviceMultiviewFeatures));
+    memset(&variable_pointer_features, 0,
+           sizeof(VkPhysicalDeviceVariablePointerFeatures));
+    memset(&protected_memory_features, 0,
+           sizeof(VkPhysicalDeviceProtectedMemoryFeatures));
+    memset(&sampler_ycbcr_conversion_features, 0,
+           sizeof(VkPhysicalDeviceSamplerYcbcrConversionFeatures));
+    memset(&shader_draw_parameter_features, 0,
+           sizeof(VkPhysicalDeviceShaderDrawParameterFeatures));
   }
   VkPhysicalDeviceProperties properties;
   VkPhysicalDeviceFeatures features;
-  VkPhysicalDeviceVariablePointerFeaturesKHR variable_pointer_features;
+  VkJsonExtVariablePointerFeatures ext_variable_pointer_features;
   VkPhysicalDeviceMemoryProperties memory;
   std::vector<VkQueueFamilyProperties> queues;
   std::vector<VkExtensionProperties> extensions;
   std::vector<VkLayerProperties> layers;
   std::map<VkFormat, VkFormatProperties> formats;
+  VkPhysicalDeviceSubgroupProperties subgroup_properties;
+  VkPhysicalDevicePointClippingProperties point_clipping_properties;
+  VkPhysicalDeviceMultiviewProperties multiview_properties;
+  VkPhysicalDeviceIDProperties id_properties;
+  VkPhysicalDeviceMaintenance3Properties maintenance3_properties;
+  VkPhysicalDevice16BitStorageFeatures bit16_storage_features;
+  VkPhysicalDeviceMultiviewFeatures multiview_features;
+  VkPhysicalDeviceVariablePointerFeatures variable_pointer_features;
+  VkPhysicalDeviceProtectedMemoryFeatures protected_memory_features;
+  VkPhysicalDeviceSamplerYcbcrConversionFeatures
+      sampler_ycbcr_conversion_features;
+  VkPhysicalDeviceShaderDrawParameterFeatures shader_draw_parameter_features;
+  std::map<VkExternalFenceHandleTypeFlagBits, VkExternalFenceProperties>
+      external_fence_properties;
+  std::map<VkExternalSemaphoreHandleTypeFlagBits, VkExternalSemaphoreProperties>
+      external_semaphore_properties;
+};
+
+struct VkJsonDeviceGroup {
+  VkJsonDeviceGroup() {
+    memset(&properties, 0, sizeof(VkPhysicalDeviceGroupProperties));
+  }
+  VkPhysicalDeviceGroupProperties properties;
+  std::vector<uint32_t> device_inds;
 };
 
 struct VkJsonInstance {
+  VkJsonInstance() : api_version(0) {}
+  uint32_t api_version;
   std::vector<VkJsonLayer> layers;
   std::vector<VkExtensionProperties> extensions;
   std::vector<VkJsonDevice> devices;
+  std::vector<VkJsonDeviceGroup> device_groups;
 };
 
 VkJsonInstance VkJsonGetInstance();

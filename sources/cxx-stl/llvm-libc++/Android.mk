@@ -23,6 +23,7 @@ libcxx_sources := \
     algorithm.cpp \
     any.cpp \
     bind.cpp \
+    charconv.cpp \
     chrono.cpp \
     condition_variable.cpp \
     debug.cpp \
@@ -66,7 +67,6 @@ libcxx_cxxflags := \
     -std=c++1z \
     -DLIBCXX_BUILDING_LIBCXXABI \
     -D_LIBCPP_BUILDING_LIBRARY \
-    -D_LIBCPP_DISABLE_NEW_DELETE_DEFINITIONS \
     -D__STDC_FORMAT_MACROS \
     $(libcxx_export_cxxflags) \
 
@@ -152,7 +152,7 @@ include $(CLEAR_VARS)
 LOCAL_MODULE := c++_static
 LOCAL_SRC_FILES := $(libcxx_sources)
 LOCAL_C_INCLUDES := $(libcxx_includes)
-LOCAL_CPPFLAGS := $(libcxx_cxxflags)
+LOCAL_CPPFLAGS := $(libcxx_cxxflags) -ffunction-sections -fdata-sections
 LOCAL_CPP_FEATURES := rtti exceptions
 LOCAL_EXPORT_C_INCLUDES := $(libcxx_export_includes)
 LOCAL_EXPORT_CPPFLAGS := $(libcxx_export_cxxflags)
@@ -173,7 +173,12 @@ include $(BUILD_STATIC_LIBRARY)
 
 include $(CLEAR_VARS)
 LOCAL_MODULE := c++_shared
-LOCAL_WHOLE_STATIC_LIBRARIES := c++_static libc++abi
+LOCAL_STRIP_MODE := none
+LOCAL_SRC_FILES := $(libcxx_sources)
+LOCAL_C_INCLUDES := $(libcxx_includes)
+LOCAL_CPPFLAGS := $(libcxx_cxxflags) -fno-function-sections -fno-data-sections
+LOCAL_CPP_FEATURES := rtti exceptions
+LOCAL_WHOLE_STATIC_LIBRARIES := libc++abi
 LOCAL_EXPORT_C_INCLUDES := $(libcxx_export_includes)
 LOCAL_EXPORT_CPPFLAGS := $(libcxx_export_cxxflags)
 LOCAL_EXPORT_LDFLAGS := $(libcxx_export_ldflags)

@@ -15,7 +15,7 @@
 cc_defaults {
     name: "libgtest_defaults",
     export_include_dirs: ["include"],
-    cflags: ["-Wall", "-Werror"],
+    cflags: ["-Wall", "-Werror", "-Wno-unused-private-field"],
 }
 
 cc_defaults {

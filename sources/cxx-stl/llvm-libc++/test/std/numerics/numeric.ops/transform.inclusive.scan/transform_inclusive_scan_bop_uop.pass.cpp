@@ -1,3 +1,4 @@
+
 //===----------------------------------------------------------------------===//
 //
 //                     The LLVM Compiler Infrastructure
@@ -10,7 +11,7 @@
 // <numeric>
 // UNSUPPORTED: c++98, c++03, c++11, c++14
 
-// template<class InputIterator, class OutputIterator, class T, 
+// template<class InputIterator, class OutputIterator, class T,
 //          class BinaryOperation, class UnaryOperation>
 //   OutputIterator transform_inclusive_scan(InputIterator first, InputIterator last,
 //                                           OutputIterator result,
@@ -19,26 +20,20 @@
 
 
 #include <numeric>
-#include <vector>
+#include <algorithm>
 #include <cassert>
+#include <functional>
 #include <iostream>
+#include <iterator>
+#include <vector>
 
 #include "test_iterators.h"
 
-template <class _Tp = void>
-struct identity : std::unary_function<_Tp, _Tp>
-{
-    constexpr const _Tp& operator()(const _Tp& __x) const { return __x;}
-};
-
-template <>
-struct identity<void>
-{
-    template <class _Tp>
-    constexpr auto operator()(_Tp&& __x) const
-    _NOEXCEPT_(noexcept(_VSTD::forward<_Tp>(__x)))
-    -> decltype        (_VSTD::forward<_Tp>(__x))
-        { return        _VSTD::forward<_Tp>(__x); }
+struct add_one {
+    template <typename T>
+    constexpr auto operator()(T x) const noexcept {
+        return static_cast<T>(x + 1);
+    }
 };
 
 template <class Iter1, class BOp, class UOp, class Iter2>
@@ -62,59 +57,59 @@ template <class Iter>
 void
 test()
 {
-          int ia[]     = {  1,  3,   5,   7,    9};
-    const int pResI0[] = {  1,  4,   9,  16,   25};        // with identity
-    const int mResI0[] = {  1,  3,  15, 105,  945};        
-    const int pResN0[] = { -1, -4,  -9, -16,  -25};        // with negate
-    const int mResN0[] = { -1,  3, -15, 105, -945};
-    const unsigned sa = sizeof(ia) / sizeof(ia[0]);
+          int ia[]     = {  1,  3,   5,   7,    9 };
+    const int pResI0[] = {  2,  6,  12,  20,   30 };        // with add_one
+    const int mResI0[] = {  2,  8, 48,  384, 3840 };
+    const int pResN0[] = { -1, -4,  -9, -16,  -25 };        // with negate
+    const int mResN0[] = { -1,  3, -15, 105, -945 };
+    const unsigned sa = sizeof(ia) / sizeof(ia[0] );
     static_assert(sa == sizeof(pResI0) / sizeof(pResI0[0]));       // just to be sure
     static_assert(sa == sizeof(mResI0) / sizeof(mResI0[0]));       // just to be sure
     static_assert(sa == sizeof(pResN0) / sizeof(pResN0[0]));       // just to be sure
     static_assert(sa == sizeof(mResN0) / sizeof(mResN0[0]));       // just to be sure
 
     for (unsigned int i = 0; i < sa; ++i ) {
-        test(Iter(ia), Iter(ia + i), std::plus<>(),       identity<>(),    pResI0, pResI0 + i);
-        test(Iter(ia), Iter(ia + i), std::multiplies<>(), identity<>(),    mResI0, mResI0 + i);
+        test(Iter(ia), Iter(ia + i), std::plus<>(),       add_one{},       pResI0, pResI0 + i);
+        test(Iter(ia), Iter(ia + i), std::multiplies<>(), add_one{},       mResI0, mResI0 + i);
         test(Iter(ia), Iter(ia + i), std::plus<>(),       std::negate<>(), pResN0, pResN0 + i);
         test(Iter(ia), Iter(ia + i), std::multiplies<>(), std::negate<>(), mResN0, mResN0 + i);
         }
 }
 
-int triangle(int n) { return n*(n+1)/2; }
+size_t triangle(size_t n) { return n*(n+1)/2; }
 
 //  Basic sanity
 void basic_tests()
 {
     {
-    std::vector<int> v(10);
+    std::vector<size_t> v(10);
     std::fill(v.begin(), v.end(), 3);
-    std::transform_inclusive_scan(v.begin(), v.end(), v.begin(), std::plus<>(), identity<>());
- 	std::copy(v.begin(), v.end(), std::ostream_iterator<int>(std::cout, " "));
-	std::cout << std::endl;	
+    std::transform_inclusive_scan(v.begin(), v.end(), v.begin(), std::plus<>(), add_one{});
+    std::copy(v.begin(), v.end(), std::ostream_iterator<size_t>(std::cout, " "));
+    std::cout << std::endl;
     for (size_t i = 0; i < v.size(); ++i)
-        assert(v[i] == (int)(i+1) * 3);
+        assert(v[i] == (i+1) * 4);
     }
 
     {
-    std::vector<int> v(10);
+    std::vector<size_t> v(10);
     std::iota(v.begin(), v.end(), 0);
-    std::transform_inclusive_scan(v.begin(), v.end(), v.begin(), std::plus<>(), identity<>());
+    std::transform_inclusive_scan(v.begin(), v.end(), v.begin(), std::plus<>(), add_one{});
     for (size_t i = 0; i < v.size(); ++i)
-        assert(v[i] == triangle(i));
+        assert(v[i] == triangle(i) + i + 1);
     }
 
     {
-    std::vector<int> v(10);
+    std::vector<size_t> v(10);
     std::iota(v.begin(), v.end(), 1);
-    std::transform_inclusive_scan(v.begin(), v.end(), v.begin(), std::plus<>(), identity<>());
+    std::transform_inclusive_scan(v.begin(), v.end(), v.begin(), std::plus<>(), add_one{});
     for (size_t i = 0; i < v.size(); ++i)
-        assert(v[i] == triangle(i + 1));
+        assert(v[i] == triangle(i + 1) + i + 1);
     }
 
     {
-    std::vector<int> v, res;
-    std::transform_inclusive_scan(v.begin(), v.end(), std::back_inserter(res), std::plus<>(), identity<>());
+    std::vector<size_t> v, res;
+    std::transform_inclusive_scan(v.begin(), v.end(), std::back_inserter(res), std::plus<>(), add_one{});
     assert(res.empty());
     }
 }
@@ -122,7 +117,7 @@ void basic_tests()
 int main()
 {
     basic_tests();
-    
+
 //  All the iterator categories
     test<input_iterator        <const int*> >();
     test<forward_iterator      <const int*> >();

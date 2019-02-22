@@ -12,20 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "pass_manager.h"
+#include "source/opt/pass_manager.h"
 
 #include <iostream>
+#include <string>
 #include <vector>
 
-#include "ir_context.h"
+#include "source/opt/ir_context.h"
+#include "source/util/timer.h"
 #include "spirv-tools/libspirv.hpp"
-#include "util/timer.h"
 
 namespace spvtools {
 
 namespace opt {
 
-Pass::Status PassManager::Run(ir::IRContext* context) {
+Pass::Status PassManager::Run(IRContext* context) {
   auto status = Pass::Status::SuccessWithoutChange;
 
   // If print_all_stream_ is not null, prints the disassembly of the module

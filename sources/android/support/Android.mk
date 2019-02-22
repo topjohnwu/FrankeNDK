@@ -38,7 +38,9 @@ android_support_c_includes += \
 android_support_cflags += \
     -include freebsd-compat.h \
     -include openbsd-compat.h \
+    -include $(LOCAL_PATH)/src/support_preinclude.h \
     -D__BIONIC_BUILD_FOR_ANDROID_SUPPORT \
+    -Werror \
 
 android_support_sources := \
     $(BIONIC_PATH)/libc/bionic/c32rtomb.cpp \
@@ -72,7 +74,6 @@ android_support_sources := \
     $(BIONIC_PATH)/libm/upstream-freebsd/lib/msun/src/e_cosh.c \
     $(BIONIC_PATH)/libm/upstream-freebsd/lib/msun/src/e_exp.c \
     $(BIONIC_PATH)/libm/upstream-freebsd/lib/msun/src/e_hypot.c \
-    $(BIONIC_PATH)/libm/upstream-freebsd/lib/msun/src/e_lgamma.c \
     $(BIONIC_PATH)/libm/upstream-freebsd/lib/msun/src/e_log.c \
     $(BIONIC_PATH)/libm/upstream-freebsd/lib/msun/src/e_log10.c \
     $(BIONIC_PATH)/libm/upstream-freebsd/lib/msun/src/e_log2.c \
@@ -129,7 +130,6 @@ LOCAL_CFLAGS := $(android_support_cflags)
 LOCAL_CPPFLAGS := \
     -fvisibility-inlines-hidden \
     -std=c++11 \
-    -Werror \
 
 LOCAL_EXPORT_C_INCLUDES := $(android_support_export_c_includes)
 

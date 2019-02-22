@@ -16,9 +16,10 @@
 // mapped_type&       at(const key_type& k);
 // const mapped_type& at(const key_type& k) const;
 
-#include <unordered_map>
-#include <string>
 #include <cassert>
+#include <stdexcept>
+#include <string>
+#include <unordered_map>
 
 #include "MoveOnly.h"
 #include "min_allocator.h"
@@ -72,7 +73,7 @@ int main()
 #ifndef TEST_HAS_NO_EXCEPTIONS
         try
         {
-            c.at(11);
+            TEST_IGNORE_NODISCARD c.at(11);
             assert(false);
         }
         catch (std::out_of_range&)
@@ -130,7 +131,7 @@ int main()
 #ifndef TEST_HAS_NO_EXCEPTIONS
         try
         {
-            c.at(11);
+            TEST_IGNORE_NODISCARD c.at(11);
             assert(false);
         }
         catch (std::out_of_range&)

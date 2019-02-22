@@ -12,17 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef LIBSPIRV_OPT_ITERATOR_H_
-#define LIBSPIRV_OPT_ITERATOR_H_
+#ifndef SOURCE_OPT_ITERATOR_H_
+#define SOURCE_OPT_ITERATOR_H_
 
 #include <cstddef>  // for ptrdiff_t
 #include <iterator>
 #include <memory>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 namespace spvtools {
-namespace ir {
+namespace opt {
 
 // An ad hoc iterator class for std::vector<std::unique_ptr<|ValueType|>>. The
 // purpose of this iterator class is to provide transparent access to those
@@ -351,7 +352,7 @@ inline
   return UptrVectorIterator(container_, container_->begin() + index);
 }
 
-}  // namespace ir
+}  // namespace opt
 }  // namespace spvtools
 
-#endif  // LIBSPIRV_OPT_ITERATOR_H_
+#endif  // SOURCE_OPT_ITERATOR_H_

@@ -1,4 +1,3 @@
-/* -*- c++ -*- */
 /*
  * Copyright (C) 2009 The Android Open Source Project
  * All rights reserved.
@@ -30,21 +29,21 @@
 #ifndef BIONIC_LIBSTDCPP_INCLUDE_CSTDDEF__
 #define BIONIC_LIBSTDCPP_INCLUDE_CSTDDEF__
 
-/*
- * Standard C++ Library wrapper around the C stddef.h header file.
- * The following 2 types are also declared in the 'std' namespace:
- *   . ptrdiff_t
- *   . size_t
- */
 #include <stddef.h>
 
 extern "C++" {
 
 namespace std {
+
 using ::ptrdiff_t;
 using ::size_t;
-}  // namespace std
 
-}  // extern C++
+#if __cplusplus >= 201103L
+typedef decltype(nullptr) nullptr_t;
+#endif
 
-#endif  // BIONIC_LIBSTDCPP_INCLUDE_CSTDDEF__
+}
+
+}
+
+#endif

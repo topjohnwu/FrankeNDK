@@ -12,23 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "redundancy_elimination.h"
+#include "source/opt/redundancy_elimination.h"
 
-#include "value_number_table.h"
+#include "source/opt/value_number_table.h"
 
 namespace spvtools {
 namespace opt {
 
-Pass::Status RedundancyEliminationPass::Process(ir::IRContext* c) {
-  InitializeProcessing(c);
-
+Pass::Status RedundancyEliminationPass::Process() {
   bool modified = false;
   ValueNumberTable vnTable(context());
 
   for (auto& func : *get_module()) {
     // Build the dominator tree for this function. It is how the code is
     // traversed.
-    opt::DominatorTree& dom_tree =
+    DominatorTree& dom_tree =
         context()->GetDominatorAnalysis(&func)->GetDomTree();
 
     // Keeps track of all ids that contain a given value number. We keep

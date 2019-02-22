@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef LIBSPIRV_UTILS_BIT_VECTOR_H_
-#define LIBSPIRV_UTILS_BIT_VECTOR_H_
+#ifndef SOURCE_UTIL_BIT_VECTOR_H_
+#define SOURCE_UTIL_BIT_VECTOR_H_
 
 #include <cstdint>
 #include <iosfwd>
@@ -33,7 +33,8 @@ class BitVector {
 
  public:
   // Creates a bit vector contianing 0s.
-  BitVector() : bits_(kInitialNumBits / kBitContainerSize, 0) {}
+  BitVector(uint32_t reserved_size = kInitialNumBits)
+      : bits_((reserved_size - 1) / kBitContainerSize + 1, 0) {}
 
   // Sets the |i|th bit to 1.  Returns the |i|th bit before it was set.
   bool Set(uint32_t i) {
@@ -88,9 +89,25 @@ class BitVector {
             (static_cast<BitContainer>(1) << bit_in_element)) != 0;
   }
 
+  // Returns true if every bit is 0.
+  bool Empty() const {
+    for (BitContainer b : bits_) {
+      if (b != 0) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   // Print a report on the densicy of the bit vector, number of 1 bits, number
   // of bytes, and average bytes for 1 bit, to |out|.
   void ReportDensity(std::ostream& out);
+
+  friend std::ostream& operator<<(std::ostream&, const BitVector&);
+
+  // Performs a bitwise-or operation on |this| and |that|, storing the result in
+  // |this|.  Return true if |this| changed.
+  bool Or(const BitVector& that);
 
  private:
   std::vector<BitContainer> bits_;
@@ -99,4 +116,4 @@ class BitVector {
 }  // namespace utils
 }  // namespace spvtools
 
-#endif  // LIBSPIRV_UTILS_BIT_VECTOR_H_
+#endif  // SOURCE_UTIL_BIT_VECTOR_H_

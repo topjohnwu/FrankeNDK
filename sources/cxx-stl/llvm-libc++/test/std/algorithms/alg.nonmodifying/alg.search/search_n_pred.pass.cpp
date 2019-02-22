@@ -10,15 +10,28 @@
 // <algorithm>
 
 // template<class ForwardIterator, class Size, class T, class BinaryPredicate>
-//   ForwardIterator
+//   constexpr ForwardIterator     // constexpr after C++17
 //   search_n(ForwardIterator first, ForwardIterator last, Size count,
 //            const T& value, BinaryPredicate pred);
 
 #include <algorithm>
 #include <cassert>
 
+#include "test_macros.h"
 #include "test_iterators.h"
 #include "user_defined_integral.hpp"
+
+#if TEST_STD_VER > 17
+TEST_CONSTEXPR bool eq(int a, int b) { return a == b; }
+
+TEST_CONSTEXPR bool test_constexpr() {
+    int ia[] = {0, 0, 1, 1, 2, 2};
+    return    (std::search_n(std::begin(ia), std::end(ia), 1, 0, eq) == ia)
+           && (std::search_n(std::begin(ia), std::end(ia), 2, 1, eq) == ia+2)
+           && (std::search_n(std::begin(ia), std::end(ia), 1, 3, eq) == std::end(ia))
+           ;
+    }
+#endif
 
 struct count_equal
 {
@@ -142,7 +155,7 @@ test()
     count_equal::count = 0;
 
     // Check that we properly convert the size argument to an integral.
-    std::search_n(Iter(ic), Iter(ic+sc), UserDefinedIntegral<unsigned>(4), 0, count_equal());
+    TEST_IGNORE_NODISCARD std::search_n(Iter(ic), Iter(ic+sc), UserDefinedIntegral<unsigned>(4), 0, count_equal());
     count_equal::count = 0;
 }
 
@@ -151,4 +164,8 @@ int main()
     test<forward_iterator<const int*> >();
     test<bidirectional_iterator<const int*> >();
     test<random_access_iterator<const int*> >();
+
+#if TEST_STD_VER > 17
+    static_assert(test_constexpr());
+#endif
 }

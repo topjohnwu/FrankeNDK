@@ -35,6 +35,10 @@ void test1 () {
 
     {
     SV sv1;
+    ASSERT_NOEXCEPT(sv1.size());
+    ASSERT_NOEXCEPT(sv1.empty());
+    ASSERT_NOEXCEPT(sv1.max_size());
+    ASSERT_NOEXCEPT(sv1.length());
     assert ( sv1.size() == 0 );
     assert ( sv1.empty());
     assert ( sv1.size() == sv1.length());
@@ -51,6 +55,11 @@ void test2 ( const CharT *s, size_t len ) {
     assert ( sv1.empty() == (len == 0));
     assert ( sv1.size() == sv1.length());
     assert ( sv1.max_size() > sv1.size());
+#if TEST_STD_VER > 14
+//  make sure we pick up std::size, too!
+    assert ( sv1.size() == std::size(sv1));
+    assert ( sv1.empty() == std::empty(sv1));
+#endif
     }
 }
 

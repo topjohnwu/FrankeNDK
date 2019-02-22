@@ -39,8 +39,6 @@ config.cxx_abi = "libcxxabi"
 config.use_sanitizer = ""
 config.configuration_variant = "libcxx.ndk"
 config.target_triple = triple
-config.gcc_toolchain = os.path.join(
-    ndk, "toolchains", toolchain + "-4.9", "prebuilt", host_tag)
 
 # Let the main config do the real work.
 config.loaded_site_config = True

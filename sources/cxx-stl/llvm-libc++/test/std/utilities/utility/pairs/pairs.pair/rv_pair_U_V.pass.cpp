@@ -67,7 +67,7 @@ struct ImplicitT {
 int main()
 {
     {
-        typedef std::pair<std::unique_ptr<Derived>, short> P1;
+        typedef std::pair<std::unique_ptr<Derived>, int> P1;
         typedef std::pair<std::unique_ptr<Base>, long> P2;
         P1 p1(std::unique_ptr<Derived>(), 4);
         P2 p2 = std::move(p1);
@@ -81,7 +81,7 @@ int main()
         P1 p1(42, 101);
         P2 p2(std::move(p1));
         assert(p2.first == 42);
-        assert(p2.second = 101);
+        assert(p2.second == 101);
     }
     {
         test_pair_rv<AllCtors, AllCtors>();

@@ -57,7 +57,7 @@ struct ImplicitT {
 int main()
 {
     {
-        typedef std::pair<int, short> P1;
+        typedef std::pair<int, int> P1;
         typedef std::pair<double, long> P2;
         const P1 p1(3, 4);
         const P2 p2 = p1;
@@ -71,7 +71,7 @@ int main()
         P1 p1(42, 101);
         P2 p2(p1);
         assert(p2.first == 42);
-        assert(p2.second = 101);
+        assert(p2.second == 101);
     }
     {
         test_pair_const<AllCtors, AllCtors>(); // copy construction
@@ -154,7 +154,7 @@ int main()
     }
 #if TEST_STD_VER > 11
     {
-        typedef std::pair<int, short> P1;
+        typedef std::pair<int, int> P1;
         typedef std::pair<double, long> P2;
         constexpr P1 p1(3, 4);
         constexpr P2 p2 = p1;

@@ -41,7 +41,6 @@ libcxxabi_includes := \
     $(LOCAL_PATH)/include \
     $(LOCAL_PATH)/../libunwind_llvm/include \
     $(LOCAL_PATH)/../libcxx/include \
-    $(LOCAL_PATH)/../../ndk/sources/android/support/include
 
 libcxxabi_cflags := -D__STDC_FORMAT_MACROS
 libcxxabi_cppflags := -std=c++11 -Wno-unknown-attributes
@@ -80,8 +79,12 @@ LOCAL_C_INCLUDES := $(libcxxabi_includes)
 LOCAL_CPPFLAGS := $(libcxxabi_cppflags)
 LOCAL_CPP_FEATURES := rtti exceptions
 LOCAL_EXPORT_C_INCLUDES := $(LOCAL_PATH)/include
+
 ifeq ($(NDK_PLATFORM_NEEDS_ANDROID_SUPPORT),true)
-    LOCAL_STATIC_LIBRARIES := android_support
+    # This doesn't affect the prebuilt itself since this is a prebuilt library,
+    # but the build system needs to know about the dependency so we can sort the
+    # exported includes properly.
+    LOCAL_STATIC_LIBRARIES += libandroid_support
 endif
 
 # Unlike the platform build, ndk-build will actually perform dependency checking

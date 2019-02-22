@@ -15,9 +15,8 @@
 #include <stdexcept>
 #include <cassert>
 
-#include "min_allocator.h"
-
 #include "test_macros.h"
+#include "min_allocator.h"
 
 int sign(int x)
 {
@@ -40,7 +39,7 @@ test(const S& s, typename S::size_type pos1, typename S::size_type n1,
     {
         try
         {
-            s.compare(pos1, n1, str);
+            TEST_IGNORE_NODISCARD s.compare(pos1, n1, str);
             assert(false);
         }
         catch (std::out_of_range&)
@@ -376,6 +375,13 @@ int main()
     test0<S>();
     test1<S>();
     test2<S>();
+    }
+#endif
+
+#if TEST_STD_VER > 3
+    {   // LWG 2946
+    std::string s = " !";
+    assert(s.compare(0, 1, {"abc", 1}) < 0);
     }
 #endif
 }

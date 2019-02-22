@@ -54,20 +54,9 @@ class Configuration(libcxx.test.config.Configuration):
 
     def configure_compile_flags(self):
         super(Configuration, self).configure_compile_flags()
+        self.cxx.flags.append('-stdlib=libc++')
 
         arch = self.get_lit_conf('arch')
-        api = int(self.get_lit_conf('api'))
-
-        sysroot = os.path.join(os.environ['NDK'], 'sysroot')
-        self.cxx.compile_flags.extend(['--sysroot', sysroot])
-
-        triple = self.get_lit_conf('target_triple')
-        header_triple = triple.rstrip('0123456789')
-        header_triple = header_triple.replace('armv7', 'arm')
-        arch_includes = os.path.join(sysroot, 'usr/include', header_triple)
-        self.cxx.compile_flags.extend(['-isystem', arch_includes])
-
-        self.cxx.compile_flags.append('-D__ANDROID_API__={}'.format(api))
 
         if arch == 'arm':
             self.cxx.flags.extend([
@@ -77,53 +66,19 @@ class Configuration(libcxx.test.config.Configuration):
                 '-mthumb',
             ])
 
-        if api < 21:
-            android_support_headers = os.path.join(
-                os.environ['NDK'], 'sources/android/support/include')
-            self.cxx.compile_flags.append('-I' + android_support_headers)
-
     def configure_link_flags(self):
-        self.cxx.link_flags.append('-nodefaultlibs')
-
-        arch = self.get_lit_conf('arch')
-        api = int(self.get_lit_conf('api'))
-
-        sysroot_path = 'platforms/android-{}/arch-{}'.format(api, arch)
-        platform_sysroot = os.path.join(os.environ['NDK'], sysroot_path)
-        self.cxx.link_flags.extend(['--sysroot', platform_sysroot])
-
-        # Configure libc++ library paths.
-        self.cxx.link_flags.append('-L' + self.cxx_library_root)
-
-        self.cxx.link_flags.append('-nostdlib++')
-
-        gcc_toolchain = self.get_lit_conf('gcc_toolchain')
-        self.cxx.link_flags.append('-gcc-toolchain')
-        self.cxx.link_flags.append(gcc_toolchain)
-
-        if api < 21:
-            self.cxx.link_flags.append('-landroid_support')
         triple = self.get_lit_conf('target_triple')
         if triple.startswith('arm-') or triple.startswith('armv7-'):
-            self.cxx.link_flags.append('-lunwind')
             self.cxx.link_flags.append('-Wl,--exclude-libs,libunwind.a')
 
         self.cxx.link_flags.append('-lcompiler_rt-extras')
         self.cxx.link_flags.append(
             '-Wl,--exclude-libs,libcompiler_rt-extras.a')
 
-        self.cxx.link_flags.append('-latomic')
         self.cxx.link_flags.append('-Wl,--exclude-libs,libatomic.a')
-
-        self.cxx.link_flags.append('-lgcc')
         self.cxx.link_flags.append('-Wl,--exclude-libs,libgcc.a')
 
-        self.cxx.link_flags.append('-lc++_shared')
-        self.cxx.link_flags.append('-lc')
-        self.cxx.link_flags.append('-lm')
-        self.cxx.link_flags.append('-ldl')
-        if self.get_lit_bool('use_pie'):
-            self.cxx.link_flags.append('-pie')
+        self.cxx.link_flags.append('-pie')
 
     def configure_features(self):
         self.config.available_features.add(self.get_lit_conf('std'))

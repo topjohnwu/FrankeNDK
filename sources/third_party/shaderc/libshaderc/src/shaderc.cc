@@ -56,6 +56,26 @@ EShLanguage GetForcedStage(shaderc_shader_kind kind) {
       return EShLangTessControl;
     case shaderc_glsl_tess_evaluation_shader:
       return EShLangTessEvaluation;
+
+#ifdef NV_EXTENSIONS
+    case shaderc_glsl_raygen_shader:
+      return EShLangRayGenNV;
+    case shaderc_glsl_anyhit_shader:
+      return EShLangAnyHitNV;
+    case shaderc_glsl_closesthit_shader:
+      return EShLangClosestHitNV;
+    case shaderc_glsl_miss_shader:
+      return EShLangMissNV;
+    case shaderc_glsl_intersection_shader:
+      return EShLangIntersectNV;
+    case shaderc_glsl_callable_shader:
+      return EShLangCallableNV;
+    case shaderc_glsl_task_shader:
+      return EShLangTaskNV;
+    case shaderc_glsl_mesh_shader:
+      return EShLangMeshNV;
+#endif
+
     case shaderc_glsl_infer_from_source:
     case shaderc_glsl_default_vertex_shader:
     case shaderc_glsl_default_fragment_shader:
@@ -63,6 +83,16 @@ EShLanguage GetForcedStage(shaderc_shader_kind kind) {
     case shaderc_glsl_default_geometry_shader:
     case shaderc_glsl_default_tess_control_shader:
     case shaderc_glsl_default_tess_evaluation_shader:
+#ifdef NV_EXTENSIONS
+    case shaderc_glsl_default_raygen_shader:
+    case shaderc_glsl_default_anyhit_shader:
+    case shaderc_glsl_default_closesthit_shader:
+    case shaderc_glsl_default_miss_shader:
+    case shaderc_glsl_default_intersection_shader:
+    case shaderc_glsl_default_callable_shader:
+    case shaderc_glsl_default_task_shader:
+    case shaderc_glsl_default_mesh_shader:
+#endif
     case shaderc_spirv_assembly:
       return EShLangCount;
   }
@@ -120,6 +150,16 @@ class StageDeducer {
       case shaderc_glsl_tess_control_shader:
       case shaderc_glsl_tess_evaluation_shader:
       case shaderc_glsl_infer_from_source:
+#ifdef NV_EXTENSIONS
+      case shaderc_glsl_raygen_shader:
+      case shaderc_glsl_anyhit_shader:
+      case shaderc_glsl_closesthit_shader:
+      case shaderc_glsl_miss_shader:
+      case shaderc_glsl_intersection_shader:
+      case shaderc_glsl_callable_shader:
+      case shaderc_glsl_task_shader:
+      case shaderc_glsl_mesh_shader:
+#endif
         return EShLangCount;
       case shaderc_glsl_default_vertex_shader:
         return EShLangVertex;
@@ -133,6 +173,23 @@ class StageDeducer {
         return EShLangTessControl;
       case shaderc_glsl_default_tess_evaluation_shader:
         return EShLangTessEvaluation;
+#ifdef NV_EXTENSIONS
+      case shaderc_glsl_default_raygen_shader:
+        return EShLangRayGenNV;
+      case shaderc_glsl_default_anyhit_shader:
+        return EShLangAnyHitNV;
+      case shaderc_glsl_default_closesthit_shader:
+        return EShLangClosestHitNV;
+      case shaderc_glsl_default_miss_shader:
+        return EShLangMissNV;
+      case shaderc_glsl_default_intersection_shader:
+        return EShLangIntersectNV;
+      case shaderc_glsl_default_callable_shader:
+        return EShLangCallableNV;
+      case shaderc_glsl_default_task_shader:
+        return EShLangTaskNV;
+      case shaderc_glsl_default_mesh_shader:
+#endif
       case shaderc_spirv_assembly:
         return EShLangCount;
     }

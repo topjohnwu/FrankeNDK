@@ -14,13 +14,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "local_single_block_elim_pass.h"
+#include "source/opt/local_single_block_elim_pass.h"
 
-#include "iterator.h"
+#include <vector>
+
+#include "source/opt/iterator.h"
 
 namespace spvtools {
 namespace opt {
-
 namespace {
 
 const uint32_t kStoreValIdInIdx = 1;
@@ -29,7 +30,7 @@ const uint32_t kStoreValIdInIdx = 1;
 
 bool LocalSingleBlockLoadStoreElimPass::HasOnlySupportedRefs(uint32_t ptrId) {
   if (supported_ref_ptrs_.find(ptrId) != supported_ref_ptrs_.end()) return true;
-  if (get_def_use_mgr()->WhileEachUser(ptrId, [this](ir::Instruction* user) {
+  if (get_def_use_mgr()->WhileEachUser(ptrId, [this](Instruction* user) {
         SpvOp op = user->opcode();
         if (IsNonPtrAccessChain(op) || op == SpvOpCopyObject) {
           if (!HasOnlySupportedRefs(user->result_id())) {
@@ -48,10 +49,12 @@ bool LocalSingleBlockLoadStoreElimPass::HasOnlySupportedRefs(uint32_t ptrId) {
 }
 
 bool LocalSingleBlockLoadStoreElimPass::LocalSingleBlockLoadStoreElim(
-    ir::Function* func) {
-  // Perform local store/load and load/load elimination on each block
+    Function* func) {
+  // Perform local store/load, load/load and store/store elimination
+  // on each block
   bool modified = false;
-  std::vector<ir::Instruction*> instructions_to_kill;
+  std::vector<Instruction*> instructions_to_kill;
+  std::unordered_set<Instruction*> instructions_to_save;
   for (auto bi = func->begin(); bi != func->end(); ++bi) {
     var2store_.clear();
     var2load_.clear();
@@ -62,27 +65,56 @@ bool LocalSingleBlockLoadStoreElimPass::LocalSingleBlockLoadStoreElim(
         case SpvOpStore: {
           // Verify store variable is target type
           uint32_t varId;
-          ir::Instruction* ptrInst = GetPtr(&*ii, &varId);
+          Instruction* ptrInst = GetPtr(&*ii, &varId);
           if (!IsTargetVar(varId)) continue;
           if (!HasOnlySupportedRefs(varId)) continue;
-          // Register the store
+          // If a store to the whole variable, remember it for succeeding
+          // loads and stores. Otherwise forget any previous store to that
+          // variable.
           if (ptrInst->opcode() == SpvOpVariable) {
-            var2store_[varId] = &*ii;
+            // If a previous store to same variable, mark the store
+            // for deletion if not still used.
+            auto prev_store = var2store_.find(varId);
+            if (prev_store != var2store_.end() &&
+                instructions_to_save.count(prev_store->second) == 0) {
+              instructions_to_kill.push_back(prev_store->second);
+              modified = true;
+            }
+
+            bool kill_store = false;
+            auto li = var2load_.find(varId);
+            if (li != var2load_.end()) {
+              if (ii->GetSingleWordInOperand(kStoreValIdInIdx) ==
+                  li->second->result_id()) {
+                // We are storing the same value that already exists in the
+                // memory location.  The store does nothing.
+                kill_store = true;
+              }
+            }
+
+            if (!kill_store) {
+              var2store_[varId] = &*ii;
+              var2load_.erase(varId);
+            } else {
+              instructions_to_kill.push_back(&*ii);
+              modified = true;
+            }
           } else {
             assert(IsNonPtrAccessChain(ptrInst->opcode()));
             var2store_.erase(varId);
+            var2load_.erase(varId);
           }
-          var2load_.erase(varId);
         } break;
         case SpvOpLoad: {
           // Verify store variable is target type
           uint32_t varId;
-          ir::Instruction* ptrInst = GetPtr(&*ii, &varId);
+          Instruction* ptrInst = GetPtr(&*ii, &varId);
           if (!IsTargetVar(varId)) continue;
           if (!HasOnlySupportedRefs(varId)) continue;
-          // Look for previous store or load
           uint32_t replId = 0;
           if (ptrInst->opcode() == SpvOpVariable) {
+            // If a load from a variable, look for a previous store or
+            // load from that variable and use its value.
             auto si = var2store_.find(varId);
             if (si != var2store_.end()) {
               replId = si->second->GetSingleWordInOperand(kStoreValIdInIdx);
@@ -92,6 +124,11 @@ bool LocalSingleBlockLoadStoreElimPass::LocalSingleBlockLoadStoreElim(
                 replId = li->second->result_id();
               }
             }
+          } else {
+            // If a partial load of a previously seen store, remember
+            // not to delete the store.
+            auto si = var2store_.find(varId);
+            if (si != var2store_.end()) instructions_to_save.insert(si->second);
           }
           if (replId != 0) {
             // replace load's result id and delete load
@@ -116,16 +153,14 @@ bool LocalSingleBlockLoadStoreElimPass::LocalSingleBlockLoadStoreElim(
     }
   }
 
-  for (ir::Instruction* inst : instructions_to_kill) {
+  for (Instruction* inst : instructions_to_kill) {
     context()->KillInst(inst);
   }
 
   return modified;
 }
 
-void LocalSingleBlockLoadStoreElimPass::Initialize(ir::IRContext* c) {
-  InitializeProcessing(c);
-
+void LocalSingleBlockLoadStoreElimPass::Initialize() {
   // Initialize Target Type Caches
   seen_target_vars_.clear();
   seen_non_target_vars_.clear();
@@ -161,7 +196,7 @@ Pass::Status LocalSingleBlockLoadStoreElimPass::ProcessImpl() {
   // return unmodified.
   if (!AllExtensionsSupported()) return Status::SuccessWithoutChange;
   // Process all entry point functions
-  ProcessFunction pfn = [this](ir::Function* fp) {
+  ProcessFunction pfn = [this](Function* fp) {
     return LocalSingleBlockLoadStoreElim(fp);
   };
 
@@ -169,10 +204,11 @@ Pass::Status LocalSingleBlockLoadStoreElimPass::ProcessImpl() {
   return modified ? Status::SuccessWithChange : Status::SuccessWithoutChange;
 }
 
-LocalSingleBlockLoadStoreElimPass::LocalSingleBlockLoadStoreElimPass() {}
+LocalSingleBlockLoadStoreElimPass::LocalSingleBlockLoadStoreElimPass() =
+    default;
 
-Pass::Status LocalSingleBlockLoadStoreElimPass::Process(ir::IRContext* c) {
-  Initialize(c);
+Pass::Status LocalSingleBlockLoadStoreElimPass::Process() {
+  Initialize();
   return ProcessImpl();
 }
 
@@ -212,6 +248,12 @@ void LocalSingleBlockLoadStoreElimPass::InitExtensions() {
       "SPV_GOOGLE_hlsl_functionality1",
       "SPV_NV_shader_subgroup_partitioned",
       "SPV_EXT_descriptor_indexing",
+      "SPV_NV_fragment_shader_barycentric",
+      "SPV_NV_compute_shader_derivatives",
+      "SPV_NV_shader_image_footprint",
+      "SPV_NV_shading_rate",
+      "SPV_NV_mesh_shader",
+      "SPV_NVX_raytracing",
   });
 }
 

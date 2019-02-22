@@ -11,6 +11,8 @@
 //  
 //===----------------------------------------------------------------------===//
 
+#define _LIBCPP_ENABLE_CXX17_REMOVED_UNEXPECTED_FUNCTIONS
+
 #include "cxxabi.h"
 
 #include <exception>        // for std::terminate
@@ -18,6 +20,11 @@
 #include "cxa_exception.hpp"
 #include "cxa_handlers.hpp"
 #include "fallback_malloc.h"
+#include "include/atomic_support.h"
+
+#if __has_feature(address_sanitizer)
+extern "C" void __asan_handle_no_return(void);
+#endif
 
 // +---------------------------+-----------------------------+---------------+
 // | __cxa_exception           | _Unwind_Exception CLNGC++\0 | thrown object |
@@ -133,6 +140,28 @@ static _LIBCXXABI_NORETURN void failed_throw(__cxa_exception* exception_header) 
     std::__terminate(exception_header->terminateHandler);
 }
 
+// Return the offset of the __cxa_exception header from the start of the
+// allocated buffer. If __cxa_exception's alignment is smaller than the maximum
+// useful alignment for the target machine, padding has to be inserted before
+// the header to ensure the thrown object that follows the header is
+// sufficiently aligned. This happens if _Unwind_exception isn't double-word
+// aligned (on Darwin, for example).
+static size_t get_cxa_exception_offset() {
+  struct S {
+  } __attribute__((aligned));
+
+  // Compute the maximum alignment for the target machine.
+  constexpr size_t alignment = std::alignment_of<S>::value;
+  constexpr size_t excp_size = sizeof(__cxa_exception);
+  constexpr size_t aligned_size =
+      (excp_size + alignment - 1) / alignment * alignment;
+  constexpr size_t offset = aligned_size - excp_size;
+  static_assert((offset == 0 ||
+                 std::alignment_of<_Unwind_Exception>::value < alignment),
+                "offset is non-zero only if _Unwind_Exception isn't aligned");
+  return offset;
+}
+
 extern "C" {
 
 //  Allocate a __cxa_exception object, and zero-fill it.
@@ -142,10 +171,16 @@ extern "C" {
 //  user's exception object.
 void *__cxa_allocate_exception(size_t thrown_size) throw() {
     size_t actual_size = cxa_exception_size_from_exception_thrown_size(thrown_size);
-    __cxa_exception *exception_header =
-        static_cast<__cxa_exception *>(__aligned_malloc_with_fallback(actual_size));
-    if (NULL == exception_header)
+
+    // Allocate extra space before the __cxa_exception header to ensure the
+    // start of the thrown object is sufficiently aligned.
+    size_t header_offset = get_cxa_exception_offset();
+    char *raw_buffer =
+        (char *)__aligned_malloc_with_fallback(header_offset + actual_size);
+    if (NULL == raw_buffer)
         std::terminate();
+    __cxa_exception *exception_header =
+        static_cast<__cxa_exception *>((void *)(raw_buffer + header_offset));
     std::memset(exception_header, 0, actual_size);
     return thrown_object_from_cxa_exception(exception_header);
 }
@@ -153,7 +188,11 @@ void *__cxa_allocate_exception(size_t thrown_size) throw() {
 
 //  Free a __cxa_exception object allocated with __cxa_allocate_exception.
 void __cxa_free_exception(void *thrown_object) throw() {
-    __aligned_free_with_fallback(cxa_exception_from_thrown_object(thrown_object));
+    // Compute the size of the padding before the header.
+    size_t header_offset = get_cxa_exception_offset();
+    char *raw_buffer =
+        ((char *)cxa_exception_from_thrown_object(thrown_object)) - header_offset;
+    __aligned_free_with_fallback((void *)raw_buffer);
 }
 
 
@@ -217,6 +256,12 @@ __cxa_throw(void *thrown_object, std::type_info *tinfo, void (*dest)(void *)) {
     globals->uncaughtExceptions += 1;   // Not atomically, since globals are thread-local
 
     exception_header->unwindHeader.exception_cleanup = exception_cleanup_func;
+
+#if __has_feature(address_sanitizer)
+    // Inform the ASan runtime that now might be a good time to clean stuff up.
+    __asan_handle_no_return();
+#endif
+
 #ifdef __USING_SJLJ_EXCEPTIONS__
     _Unwind_SjLj_RaiseException(&exception_header->unwindHeader);
 #else
@@ -574,7 +619,7 @@ __cxa_increment_exception_refcount(void *thrown_object) throw() {
     if (thrown_object != NULL )
     {
         __cxa_exception* exception_header = cxa_exception_from_thrown_object(thrown_object);
-        __sync_add_and_fetch(&exception_header->referenceCount, 1);
+        std::__libcpp_atomic_add(&exception_header->referenceCount, size_t(1));
     }
 }
 
@@ -586,12 +631,12 @@ __cxa_increment_exception_refcount(void *thrown_object) throw() {
 
     Requires:  If thrown_object is not NULL, it is a native exception.
 */
-void
-__cxa_decrement_exception_refcount(void *thrown_object) throw() {
+_LIBCXXABI_NO_CFI
+void __cxa_decrement_exception_refcount(void *thrown_object) throw() {
     if (thrown_object != NULL )
     {
         __cxa_exception* exception_header = cxa_exception_from_thrown_object(thrown_object);
-        if (__sync_sub_and_fetch(&exception_header->referenceCount, size_t(1)) == 0)
+        if (std::__libcpp_atomic_add(&exception_header->referenceCount, size_t(-1)) == 0)
         {
             if (NULL != exception_header->exceptionDestructor)
                 exception_header->exceptionDestructor(thrown_object);

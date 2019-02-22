@@ -15,22 +15,23 @@
 // This file defines the language constructs for representing a SPIR-V
 // module in memory.
 
-#ifndef LIBSPIRV_OPT_BASIC_BLOCK_H_
-#define LIBSPIRV_OPT_BASIC_BLOCK_H_
+#ifndef SOURCE_OPT_BASIC_BLOCK_H_
+#define SOURCE_OPT_BASIC_BLOCK_H_
 
 #include <functional>
 #include <iterator>
 #include <memory>
 #include <ostream>
+#include <string>
 #include <utility>
 #include <vector>
 
-#include "instruction.h"
-#include "instruction_list.h"
-#include "iterator.h"
+#include "source/opt/instruction.h"
+#include "source/opt/instruction_list.h"
+#include "source/opt/iterator.h"
 
 namespace spvtools {
-namespace ir {
+namespace opt {
 
 class Function;
 class IRContext;
@@ -53,6 +54,9 @@ class BasicBlock {
   //
   // The parent function will default to null and needs to be explicitly set by
   // the user.
+  //
+  // If the inst-to-block map in |context| is valid, then the new instructions
+  // will be inserted into the map.
   BasicBlock* Clone(IRContext*) const;
 
   // Sets the enclosing function for this basic block.
@@ -159,14 +163,14 @@ class BasicBlock {
   void ForEachSuccessorLabel(const std::function<void(uint32_t*)>& f);
 
   // Returns true if |block| is a direct successor of |this|.
-  bool IsSuccessor(const ir::BasicBlock* block) const;
+  bool IsSuccessor(const BasicBlock* block) const;
 
   // Runs the given function |f| on the merge and continue label, if any
   void ForMergeAndContinueLabel(const std::function<void(const uint32_t)>& f);
 
   // Returns true if this basic block has any Phi instructions.
   bool HasPhiInstructions() {
-    return !WhileEachPhiInst([](ir::Instruction*) { return false; });
+    return !WhileEachPhiInst([](Instruction*) { return false; });
   }
 
   // Return true if this block is a loop header block.
@@ -197,7 +201,8 @@ class BasicBlock {
 
   // Splits this basic block into two. Returns a new basic block with label
   // |labelId| containing the instructions from |iter| onwards. Instructions
-  // prior to |iter| remain in this basic block.
+  // prior to |iter| remain in this basic block.  The new block will be added
+  // to the function immediately after the original block.
   BasicBlock* SplitBasicBlock(IRContext* context, uint32_t label_id,
                               iterator iter);
 
@@ -207,6 +212,10 @@ class BasicBlock {
   // |options| are the disassembly options. SPV_BINARY_TO_TEXT_OPTION_NO_HEADER
   // is always added to |options|.
   std::string PrettyPrint(uint32_t options = 0u) const;
+
+  // Dump this basic block on stderr.  Useful when running interactive
+  // debuggers.
+  void Dump() const;
 
  private:
   // The enclosing function.
@@ -313,7 +322,7 @@ inline void BasicBlock::ForEachPhiInst(
       run_on_debug_line_insts);
 }
 
-}  // namespace ir
+}  // namespace opt
 }  // namespace spvtools
 
-#endif  // LIBSPIRV_OPT_BASIC_BLOCK_H_
+#endif  // SOURCE_OPT_BASIC_BLOCK_H_

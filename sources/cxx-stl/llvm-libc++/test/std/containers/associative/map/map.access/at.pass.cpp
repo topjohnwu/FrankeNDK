@@ -14,8 +14,9 @@
 //       mapped_type& at(const key_type& k);
 // const mapped_type& at(const key_type& k) const;
 
-#include <map>
 #include <cassert>
+#include <map>
+#include <stdexcept>
 
 #include "min_allocator.h"
 #include "test_macros.h"
@@ -46,7 +47,7 @@ int main()
 #ifndef TEST_HAS_NO_EXCEPTIONS
         try
         {
-            m.at(6);
+            TEST_IGNORE_NODISCARD m.at(6);
             assert(false);
         }
         catch (std::out_of_range&)
@@ -79,7 +80,7 @@ int main()
 #ifndef TEST_HAS_NO_EXCEPTIONS
         try
         {
-            m.at(6);
+            TEST_IGNORE_NODISCARD m.at(6);
             assert(false);
         }
         catch (std::out_of_range&)
@@ -115,7 +116,7 @@ int main()
 #ifndef TEST_HAS_NO_EXCEPTIONS
         try
         {
-            m.at(6);
+            TEST_IGNORE_NODISCARD m.at(6);
             assert(false);
         }
         catch (std::out_of_range&)
@@ -148,7 +149,7 @@ int main()
 #ifndef TEST_HAS_NO_EXCEPTIONS
         try
         {
-            m.at(6);
+            TEST_IGNORE_NODISCARD m.at(6);
             assert(false);
         }
         catch (std::out_of_range&)

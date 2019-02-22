@@ -28,17 +28,17 @@ struct A
     ~A() {A_constructed = false;}
 };
 
-A *volatile ap;
-
 int main()
 {
     globalMemCounter.reset();
     assert(globalMemCounter.checkOutstandingNewEq(0));
-    ap = new A;
+    A *ap = new A;
+    DoNotOptimize(ap);
     assert(ap);
     assert(A_constructed);
     assert(globalMemCounter.checkOutstandingNewEq(1));
     delete ap;
+    DoNotOptimize(ap);
     assert(!A_constructed);
     assert(globalMemCounter.checkOutstandingNewEq(0));
 }
