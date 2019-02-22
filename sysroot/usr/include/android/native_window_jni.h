@@ -52,7 +52,7 @@ ANativeWindow* ANativeWindow_fromSurface(JNIEnv* env, jobject surface);
  * and will automatically release the reference when the Java object gets garbage
  * collected.
  */
-jobject ANativeWindow_toSurface(JNIEnv* env, ANativeWindow* window);
+jobject ANativeWindow_toSurface(JNIEnv* env, ANativeWindow* window) __INTRODUCED_IN(26);
 #endif
 
 #ifdef __cplusplus

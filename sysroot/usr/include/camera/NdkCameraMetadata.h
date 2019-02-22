@@ -191,7 +191,8 @@ typedef struct ACameraMetadata_const_entry {
  *             of input tag value.</li></ul>
  */
 camera_status_t ACameraMetadata_getConstEntry(
-        const ACameraMetadata* metadata, uint32_t tag, /*out*/ACameraMetadata_const_entry* entry);
+        const ACameraMetadata* metadata,
+        uint32_t tag, /*out*/ACameraMetadata_const_entry* entry) __INTRODUCED_IN(24);
 
 /**
  * List all the entry tags in input {@link ACameraMetadata}.
@@ -208,7 +209,8 @@ camera_status_t ACameraMetadata_getConstEntry(
  *         <li>{@link ACAMERA_ERROR_UNKNOWN} if the method fails for some other reasons.</li></ul>
  */
 camera_status_t ACameraMetadata_getAllTags(
-        const ACameraMetadata* metadata, /*out*/int32_t* numEntries, /*out*/const uint32_t** tags);
+        const ACameraMetadata* metadata,
+        /*out*/int32_t* numEntries, /*out*/const uint32_t** tags) __INTRODUCED_IN(24);
 
 /**
  * Create a copy of input {@link ACameraMetadata}.
@@ -220,14 +222,14 @@ camera_status_t ACameraMetadata_getAllTags(
  *
  * @return a valid ACameraMetadata pointer or NULL if the input metadata cannot be copied.
  */
-ACameraMetadata* ACameraMetadata_copy(const ACameraMetadata* src);
+ACameraMetadata* ACameraMetadata_copy(const ACameraMetadata* src) __INTRODUCED_IN(24);
 
 /**
  * Free a {@link ACameraMetadata} structure.
  *
  * @param metadata the {@link ACameraMetadata} to be freed.
  */
-void ACameraMetadata_free(ACameraMetadata* metadata);
+void ACameraMetadata_free(ACameraMetadata* metadata) __INTRODUCED_IN(24);
 
 #endif /* __ANDROID_API__ >= 24 */
 

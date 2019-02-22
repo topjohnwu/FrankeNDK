@@ -30,8 +30,6 @@
 
 __BEGIN_DECLS
 
-#if __ANDROID_API__ >= 24
-
 struct AChoreographer;
 typedef struct AChoreographer AChoreographer;
 
@@ -45,25 +43,29 @@ typedef struct AChoreographer AChoreographer;
  */
 typedef void (*AChoreographer_frameCallback)(long frameTimeNanos, void* data);
 
+#if __ANDROID_API__ >= 24
+
 /**
  * Get the AChoreographer instance for the current thread. This must be called
  * on an ALooper thread.
  */
-AChoreographer* AChoreographer_getInstance();
+AChoreographer* AChoreographer_getInstance() __INTRODUCED_IN(24);
 
 /**
  * Post a callback to be run on the next frame. The data pointer provided will
  * be passed to the callback function when it's called.
  */
 void AChoreographer_postFrameCallback(AChoreographer* choreographer,
-                AChoreographer_frameCallback callback, void* data);
+                AChoreographer_frameCallback callback, void* data) __INTRODUCED_IN(24);
+
 /**
  * Post a callback to be run on the frame following the specified delay. The
  * data pointer provided will be passed to the callback function when it's
  * called.
  */
 void AChoreographer_postFrameCallbackDelayed(AChoreographer* choreographer,
-                AChoreographer_frameCallback callback, void* data, long delayMillis);
+                AChoreographer_frameCallback callback, void* data,
+                long delayMillis) __INTRODUCED_IN(24);
 
 #endif /* __ANDROID_API__ >= 24 */
 

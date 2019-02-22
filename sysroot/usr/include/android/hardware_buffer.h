@@ -215,6 +215,8 @@ typedef struct AHardwareBuffer_Desc {
 
 typedef struct AHardwareBuffer AHardwareBuffer;
 
+#if __ANDROID_API__ >= 26
+
 /**
  * Allocates a buffer that backs an AHardwareBuffer using the passed
  * AHardwareBuffer_Desc.
@@ -223,25 +225,25 @@ typedef struct AHardwareBuffer AHardwareBuffer;
  * any reason. The returned buffer has a reference count of 1.
  */
 int AHardwareBuffer_allocate(const AHardwareBuffer_Desc* desc,
-        AHardwareBuffer** outBuffer);
+        AHardwareBuffer** outBuffer) __INTRODUCED_IN(26);
 /**
  * Acquire a reference on the given AHardwareBuffer object.  This prevents the
  * object from being deleted until the last reference is removed.
  */
-void AHardwareBuffer_acquire(AHardwareBuffer* buffer);
+void AHardwareBuffer_acquire(AHardwareBuffer* buffer) __INTRODUCED_IN(26);
 
 /**
  * Remove a reference that was previously acquired with
  * AHardwareBuffer_acquire().
  */
-void AHardwareBuffer_release(AHardwareBuffer* buffer);
+void AHardwareBuffer_release(AHardwareBuffer* buffer) __INTRODUCED_IN(26);
 
 /**
  * Return a description of the AHardwareBuffer in the passed
  * AHardwareBuffer_Desc struct.
  */
 void AHardwareBuffer_describe(const AHardwareBuffer* buffer,
-        AHardwareBuffer_Desc* outDesc);
+        AHardwareBuffer_Desc* outDesc) __INTRODUCED_IN(26);
 
 /**
  * Lock the AHardwareBuffer for reading or writing, depending on the usage flags
@@ -277,7 +279,7 @@ void AHardwareBuffer_describe(const AHardwareBuffer* buffer,
  * number of the lock fails for any reason.
  */
 int AHardwareBuffer_lock(AHardwareBuffer* buffer, uint64_t usage,
-        int32_t fence, const ARect* rect, void** outVirtualAddress);
+        int32_t fence, const ARect* rect, void** outVirtualAddress) __INTRODUCED_IN(26);
 
 /**
  * Unlock the AHardwareBuffer; must be called after all changes to the buffer
@@ -289,7 +291,7 @@ int AHardwareBuffer_lock(AHardwareBuffer* buffer, uint64_t usage,
  * \return 0 on success, -EINVAL if \a buffer is NULL, or an error
  * number if the unlock fails for any reason.
  */
-int AHardwareBuffer_unlock(AHardwareBuffer* buffer, int32_t* fence);
+int AHardwareBuffer_unlock(AHardwareBuffer* buffer, int32_t* fence) __INTRODUCED_IN(26);
 
 /**
  * Send the AHardwareBuffer to an AF_UNIX socket.
@@ -297,7 +299,7 @@ int AHardwareBuffer_unlock(AHardwareBuffer* buffer, int32_t* fence);
  * \return 0 on success, -EINVAL if \a buffer is NULL, or an error
  * number if the operation fails for any reason.
  */
-int AHardwareBuffer_sendHandleToUnixSocket(const AHardwareBuffer* buffer, int socketFd);
+int AHardwareBuffer_sendHandleToUnixSocket(const AHardwareBuffer* buffer, int socketFd) __INTRODUCED_IN(26);
 
 /**
  * Receive the AHardwareBuffer from an AF_UNIX socket.
@@ -305,7 +307,9 @@ int AHardwareBuffer_sendHandleToUnixSocket(const AHardwareBuffer* buffer, int so
  * \return 0 on success, -EINVAL if \a outBuffer is NULL, or an error
  * number if the operation fails for any reason.
  */
-int AHardwareBuffer_recvHandleFromUnixSocket(int socketFd, AHardwareBuffer** outBuffer);
+int AHardwareBuffer_recvHandleFromUnixSocket(int socketFd, AHardwareBuffer** outBuffer) __INTRODUCED_IN(26);
+
+#endif // __ANDROID_API__ >= 26
 
 __END_DECLS
 

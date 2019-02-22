@@ -84,19 +84,19 @@ typedef void (*AMediaDataSourceClose)(void *userdata);
  * Create new media data source. Returns NULL if memory allocation
  * for the new data source object fails.
  */
-AMediaDataSource* AMediaDataSource_new();
+AMediaDataSource* AMediaDataSource_new() __INTRODUCED_IN(28);
 
 /**
  * Delete a previously created media data source.
  */
-void AMediaDataSource_delete(AMediaDataSource*);
+void AMediaDataSource_delete(AMediaDataSource*) __INTRODUCED_IN(28);
 
 /**
  * Set an user provided opaque handle. This opaque handle is passed as
  * the first argument to the data source callbacks.
  */
 void AMediaDataSource_setUserdata(
-        AMediaDataSource*, void *userdata);
+        AMediaDataSource*, void *userdata) __INTRODUCED_IN(28);
 
 /**
  * Set a custom callback for supplying random access media data to the
@@ -111,7 +111,7 @@ void AMediaDataSource_setUserdata(
  */
 void AMediaDataSource_setReadAt(
         AMediaDataSource*,
-        AMediaDataSourceReadAt);
+        AMediaDataSourceReadAt) __INTRODUCED_IN(28);
 
 /**
  * Set a custom callback for supplying the size of the data source to the
@@ -122,7 +122,7 @@ void AMediaDataSource_setReadAt(
  */
 void AMediaDataSource_setGetSize(
         AMediaDataSource*,
-        AMediaDataSourceGetSize);
+        AMediaDataSourceGetSize) __INTRODUCED_IN(28);
 
 /**
  * Set a custom callback to receive signal from the NDK media framework
@@ -133,7 +133,7 @@ void AMediaDataSource_setGetSize(
  */
 void AMediaDataSource_setClose(
         AMediaDataSource*,
-        AMediaDataSourceClose);
+        AMediaDataSourceClose) __INTRODUCED_IN(28);
 
 #endif  /*__ANDROID_API__ >= 28 */
 

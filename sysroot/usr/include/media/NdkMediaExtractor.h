@@ -54,23 +54,24 @@ typedef struct AMediaExtractor AMediaExtractor;
 /**
  * Create new media extractor
  */
-AMediaExtractor* AMediaExtractor_new();
+AMediaExtractor* AMediaExtractor_new() __INTRODUCED_IN(21);
 
 /**
  * Delete a previously created media extractor
  */
-media_status_t AMediaExtractor_delete(AMediaExtractor*);
+media_status_t AMediaExtractor_delete(AMediaExtractor*) __INTRODUCED_IN(21);
 
 /**
  *  Set the file descriptor from which the extractor will read.
  */
 media_status_t AMediaExtractor_setDataSourceFd(AMediaExtractor*, int fd, off64_t offset,
-        off64_t length);
+        off64_t length) __INTRODUCED_IN(21);
 
 /**
  * Set the URI from which the extractor will read.
  */
-media_status_t AMediaExtractor_setDataSource(AMediaExtractor*, const char *location);
+media_status_t AMediaExtractor_setDataSource(AMediaExtractor*,
+        const char *location) __INTRODUCED_IN(21);
         // TODO support headers
 
 #if __ANDROID_API__ >= 28
@@ -78,19 +79,20 @@ media_status_t AMediaExtractor_setDataSource(AMediaExtractor*, const char *locat
 /**
  * Set the custom data source implementation from which the extractor will read.
  */
-media_status_t AMediaExtractor_setDataSourceCustom(AMediaExtractor*, AMediaDataSource *src);
+media_status_t AMediaExtractor_setDataSourceCustom(AMediaExtractor*,
+        AMediaDataSource *src) __INTRODUCED_IN(28);
 
 #endif /* __ANDROID_API__ >= 28 */
 
 /**
  * Return the number of tracks in the previously specified media file
  */
-size_t AMediaExtractor_getTrackCount(AMediaExtractor*);
+size_t AMediaExtractor_getTrackCount(AMediaExtractor*) __INTRODUCED_IN(21);
 
 /**
  * Return the format of the specified track. The caller must free the returned format
  */
-AMediaFormat* AMediaExtractor_getTrackFormat(AMediaExtractor*, size_t idx);
+AMediaFormat* AMediaExtractor_getTrackFormat(AMediaExtractor*, size_t idx) __INTRODUCED_IN(21);
 
 /**
  * Select the specified track. Subsequent calls to readSampleData, getSampleTrackIndex and
@@ -98,41 +100,42 @@ AMediaFormat* AMediaExtractor_getTrackFormat(AMediaExtractor*, size_t idx);
  * Selecting the same track multiple times has no effect, the track is
  * only selected once.
  */
-media_status_t AMediaExtractor_selectTrack(AMediaExtractor*, size_t idx);
+media_status_t AMediaExtractor_selectTrack(AMediaExtractor*, size_t idx) __INTRODUCED_IN(21);
 
 /**
  * Unselect the specified track. Subsequent calls to readSampleData, getSampleTrackIndex and
  * getSampleTime only retrieve information for the subset of tracks selected..
  */
-media_status_t AMediaExtractor_unselectTrack(AMediaExtractor*, size_t idx);
+media_status_t AMediaExtractor_unselectTrack(AMediaExtractor*, size_t idx) __INTRODUCED_IN(21);
 
 /**
  * Read the current sample.
  */
-ssize_t AMediaExtractor_readSampleData(AMediaExtractor*, uint8_t *buffer, size_t capacity);
+ssize_t AMediaExtractor_readSampleData(AMediaExtractor*,
+        uint8_t *buffer, size_t capacity) __INTRODUCED_IN(21);
 
 /**
  * Read the current sample's flags.
  */
-uint32_t AMediaExtractor_getSampleFlags(AMediaExtractor*); // see definitions below
+uint32_t AMediaExtractor_getSampleFlags(AMediaExtractor*) __INTRODUCED_IN(21);
 
 /**
  * Returns the track index the current sample originates from (or -1
  * if no more samples are available)
  */
-int AMediaExtractor_getSampleTrackIndex(AMediaExtractor*);
+int AMediaExtractor_getSampleTrackIndex(AMediaExtractor*) __INTRODUCED_IN(21);
 
 /**
  * Returns the current sample's presentation time in microseconds.
  * or -1 if no more samples are available.
  */
-int64_t AMediaExtractor_getSampleTime(AMediaExtractor*);
+int64_t AMediaExtractor_getSampleTime(AMediaExtractor*) __INTRODUCED_IN(21);
 
 /**
  * Advance to the next sample. Returns false if no more sample data
  * is available (end of stream).
  */
-bool AMediaExtractor_advance(AMediaExtractor*);
+bool AMediaExtractor_advance(AMediaExtractor*) __INTRODUCED_IN(21);
 
 typedef enum {
     AMEDIAEXTRACTOR_SEEK_PREVIOUS_SYNC,
@@ -143,7 +146,8 @@ typedef enum {
 /**
  *
  */
-media_status_t AMediaExtractor_seekTo(AMediaExtractor*, int64_t seekPosUs, SeekMode mode);
+media_status_t AMediaExtractor_seekTo(AMediaExtractor*,
+        int64_t seekPosUs, SeekMode mode) __INTRODUCED_IN(21);
 
 /**
  * mapping of crypto scheme uuid to the scheme specific data for that scheme
@@ -165,10 +169,10 @@ typedef struct PsshInfo {
 /**
  * Get the PSSH info if present.
  */
-PsshInfo* AMediaExtractor_getPsshInfo(AMediaExtractor*);
+PsshInfo* AMediaExtractor_getPsshInfo(AMediaExtractor*) __INTRODUCED_IN(21);
 
 
-AMediaCodecCryptoInfo *AMediaExtractor_getSampleCryptoInfo(AMediaExtractor *);
+AMediaCodecCryptoInfo *AMediaExtractor_getSampleCryptoInfo(AMediaExtractor *) __INTRODUCED_IN(21);
 
 enum {
     AMEDIAEXTRACTOR_SAMPLE_FLAG_SYNC = 1,
@@ -184,7 +188,7 @@ enum {
  * This function will always return a format; however, the format could be empty
  * (no key-value pairs) if the media container does not provide format information.
  */
-AMediaFormat* AMediaExtractor_getFileFormat(AMediaExtractor*);
+AMediaFormat* AMediaExtractor_getFileFormat(AMediaExtractor*) __INTRODUCED_IN(28);
 
 /**
  * Returns the size of the current sample in bytes, or -1 when no samples are
@@ -196,7 +200,7 @@ AMediaFormat* AMediaExtractor_getFileFormat(AMediaExtractor*);
  * AMediaExtractor_readSampleData(ex, buf, sampleSize);
  *
  */
-ssize_t AMediaExtractor_getSampleSize(AMediaExtractor*);
+ssize_t AMediaExtractor_getSampleSize(AMediaExtractor*) __INTRODUCED_IN(28);
 
 /**
  * Returns the duration of cached media samples downloaded from a network data source
@@ -209,7 +213,7 @@ ssize_t AMediaExtractor_getSampleSize(AMediaExtractor*);
  * cached duration cannot be calculated (bitrate, duration, and file size information
  * not available).
  */
-int64_t AMediaExtractor_getCachedDuration(AMediaExtractor *);
+int64_t AMediaExtractor_getCachedDuration(AMediaExtractor *) __INTRODUCED_IN(28);
 
 /**
  * Read the current sample's metadata format into |fmt|. Examples of sample metadata are
@@ -220,7 +224,8 @@ int64_t AMediaExtractor_getCachedDuration(AMediaExtractor *);
  * Existing key-value pairs in |fmt| would be removed if this API returns AMEDIA_OK.
  * The contents of |fmt| is undefined if this API returns AMEDIA_ERROR_*.
  */
-media_status_t AMediaExtractor_getSampleFormat(AMediaExtractor *ex, AMediaFormat *fmt);
+media_status_t AMediaExtractor_getSampleFormat(AMediaExtractor *ex,
+        AMediaFormat *fmt) __INTRODUCED_IN(28);
 
 #endif /* __ANDROID_API__ >= 28 */
 

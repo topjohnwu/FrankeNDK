@@ -43,6 +43,7 @@
  */
 
 #include <stdint.h>
+#include <sys/cdefs.h>
 
 #include <android/native_window.h>
 
@@ -58,13 +59,15 @@ struct ASurfaceTexture;
  */
 typedef struct ASurfaceTexture ASurfaceTexture;
 
+#if __ANDROID_API__ >= 28
+
 /**
  * Release the reference to the native ASurfaceTexture acquired with
  * ASurfaceTexture_fromSurfaceTexture().
  * Failing to do so will result in leaked memory and graphic resources.
  * \param st A ASurfaceTexture reference acquired with ASurfaceTexture_fromSurfaceTexture()
  */
-void ASurfaceTexture_release(ASurfaceTexture* st);
+void ASurfaceTexture_release(ASurfaceTexture* st) __INTRODUCED_IN(28);
 
 /**
  * Returns a reference to an ANativeWindow (i.e. the Producer) for this SurfaceTexture.
@@ -73,9 +76,9 @@ void ASurfaceTexture_release(ASurfaceTexture* st);
  * \param st A ASurfaceTexture reference acquired with ASurfaceTexture_fromSurfaceTexture()
  * @return A reference to an ANativeWindow. This reference MUST BE released when no longer needed
  * using ANativeWindow_release(). Failing to do so will result in leaked resources. nullptr is
- * returned if \st is null or if it's not an instance of android.graphics.SurfaceTexture
+ * returned if \p st is null or if it's not an instance of android.graphics.SurfaceTexture
  */
-ANativeWindow* ASurfaceTexture_acquireANativeWindow(ASurfaceTexture* st);
+ANativeWindow* ASurfaceTexture_acquireANativeWindow(ASurfaceTexture* st) __INTRODUCED_IN(28);
 
 /**
  * Attach the SurfaceTexture to the OpenGL ES context that is current on the calling thread.  A
@@ -92,7 +95,7 @@ ANativeWindow* ASurfaceTexture_acquireANativeWindow(ASurfaceTexture* st);
  * must be unusued in the OpenGL ES context that is current on the calling thread.
  * \return 0 on success, negative posix error code otherwise (see <errno.h>)
  */
-int ASurfaceTexture_attachToGLContext(ASurfaceTexture* st, uint32_t texName);
+int ASurfaceTexture_attachToGLContext(ASurfaceTexture* st, uint32_t texName) __INTRODUCED_IN(28);
 
 /**
  * Detach the SurfaceTexture from the OpenGL ES context that owns the OpenGL ES texture object.
@@ -108,7 +111,7 @@ int ASurfaceTexture_attachToGLContext(ASurfaceTexture* st, uint32_t texName);
  * \param st A ASurfaceTexture reference acquired with ASurfaceTexture_fromSurfaceTexture()
  * \return 0 on success, negative posix error code otherwise (see <errno.h>)
  */
-int ASurfaceTexture_detachFromGLContext(ASurfaceTexture* st);
+int ASurfaceTexture_detachFromGLContext(ASurfaceTexture* st) __INTRODUCED_IN(28);
 
 /**
  * Update the texture image to the most recent frame from the image stream.  This may only be
@@ -118,7 +121,7 @@ int ASurfaceTexture_detachFromGLContext(ASurfaceTexture* st);
  * \param st A ASurfaceTexture reference acquired with ASurfaceTexture_fromSurfaceTexture()
  * \return 0 on success, negative posix error code otherwise (see <errno.h>)
  */
-int ASurfaceTexture_updateTexImage(ASurfaceTexture* st);
+int ASurfaceTexture_updateTexImage(ASurfaceTexture* st) __INTRODUCED_IN(28);
 
 /**
  * Retrieve the 4x4 texture coordinate transform matrix associated with the texture image set by
@@ -136,7 +139,7 @@ int ASurfaceTexture_updateTexImage(ASurfaceTexture* st);
  * \param mtx the array into which the 4x4 matrix will be stored.  The array must have exactly
  *     16 elements.
  */
-void ASurfaceTexture_getTransformMatrix(ASurfaceTexture* st, float mtx[16]);
+void ASurfaceTexture_getTransformMatrix(ASurfaceTexture* st, float mtx[16]) __INTRODUCED_IN(28);
 
 /**
  * Retrieve the timestamp associated with the texture image set by the most recent call to
@@ -155,7 +158,9 @@ void ASurfaceTexture_getTransformMatrix(ASurfaceTexture* st, float mtx[16]);
  *
  * \param st A ASurfaceTexture reference acquired with ASurfaceTexture_fromSurfaceTexture()
  */
-int64_t ASurfaceTexture_getTimestamp(ASurfaceTexture* st);
+int64_t ASurfaceTexture_getTimestamp(ASurfaceTexture* st) __INTRODUCED_IN(28);
+
+#endif /* __ANDROID_API__ >= 28 */
 
 __END_DECLS
 

@@ -56,6 +56,10 @@
 #include <android/keycodes.h>
 #include <android/looper.h>
 
+#if !defined(__INTRODUCED_IN)
+#define __INTRODUCED_IN(__api_level) /* nothing */
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -984,7 +988,7 @@ int32_t AMotionEvent_getMetaState(const AInputEvent* motion_event);
 
 #if __ANDROID_API__ >= 14
 /** Get the button state of all buttons that are pressed. */
-int32_t AMotionEvent_getButtonState(const AInputEvent* motion_event);
+int32_t AMotionEvent_getButtonState(const AInputEvent* motion_event) __INTRODUCED_IN(14);
 #endif
 
 /**
@@ -1056,7 +1060,7 @@ int32_t AMotionEvent_getPointerId(const AInputEvent* motion_event, size_t pointe
  * The tool type indicates the type of tool used to make contact such as a
  * finger or stylus, if known.
  */
-int32_t AMotionEvent_getToolType(const AInputEvent* motion_event, size_t pointer_index);
+int32_t AMotionEvent_getToolType(const AInputEvent* motion_event, size_t pointer_index) __INTRODUCED_IN(14);
 #endif
 
 /**
@@ -1150,7 +1154,7 @@ float AMotionEvent_getOrientation(const AInputEvent* motion_event, size_t pointe
 #if __ANDROID_API__ >= 13
 /** Get the value of the request axis for the given pointer index. */
 float AMotionEvent_getAxisValue(const AInputEvent* motion_event,
-        int32_t axis, size_t pointer_index);
+        int32_t axis, size_t pointer_index) __INTRODUCED_IN(13);
 #endif
 
 /**
@@ -1288,7 +1292,7 @@ float AMotionEvent_getHistoricalOrientation(const AInputEvent* motion_event, siz
  * that occurred between this event and the previous motion event.
  */
 float AMotionEvent_getHistoricalAxisValue(const AInputEvent* motion_event,
-        int32_t axis, size_t pointer_index, size_t history_index);
+        int32_t axis, size_t pointer_index, size_t history_index) __INTRODUCED_IN(13);
 #endif
 
 

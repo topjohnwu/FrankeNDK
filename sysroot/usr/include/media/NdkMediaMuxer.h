@@ -58,12 +58,12 @@ typedef enum {
 /**
  * Create new media muxer
  */
-AMediaMuxer* AMediaMuxer_new(int fd, OutputFormat format);
+AMediaMuxer* AMediaMuxer_new(int fd, OutputFormat format) __INTRODUCED_IN(21);
 
 /**
  * Delete a previously created media muxer
  */
-media_status_t AMediaMuxer_delete(AMediaMuxer*);
+media_status_t AMediaMuxer_delete(AMediaMuxer*) __INTRODUCED_IN(21);
 
 /**
  * Set and store the geodata (latitude and longitude) in the output file.
@@ -76,7 +76,8 @@ media_status_t AMediaMuxer_delete(AMediaMuxer*);
  * Latitude must be in the range [-90, 90].
  * Longitude must be in the range [-180, 180].
  */
-media_status_t AMediaMuxer_setLocation(AMediaMuxer*, float latitude, float longitude);
+media_status_t AMediaMuxer_setLocation(AMediaMuxer*,
+        float latitude, float longitude) __INTRODUCED_IN(21);
 
 /**
  * Sets the orientation hint for output video playback.
@@ -90,26 +91,26 @@ media_status_t AMediaMuxer_setLocation(AMediaMuxer*, float latitude, float longi
  * The angle is specified in degrees, clockwise.
  * The supported angles are 0, 90, 180, and 270 degrees.
  */
-media_status_t AMediaMuxer_setOrientationHint(AMediaMuxer*, int degrees);
+media_status_t AMediaMuxer_setOrientationHint(AMediaMuxer*, int degrees) __INTRODUCED_IN(21);
 
 /**
  * Adds a track with the specified format.
  * Returns the index of the new track or a negative value in case of failure,
  * which can be interpreted as a media_status_t.
  */
-ssize_t AMediaMuxer_addTrack(AMediaMuxer*, const AMediaFormat* format);
+ssize_t AMediaMuxer_addTrack(AMediaMuxer*, const AMediaFormat* format) __INTRODUCED_IN(21);
 
 /**
  * Start the muxer. Should be called after AMediaMuxer_addTrack and
  * before AMediaMuxer_writeSampleData.
  */
-media_status_t AMediaMuxer_start(AMediaMuxer*);
+media_status_t AMediaMuxer_start(AMediaMuxer*) __INTRODUCED_IN(21);
 
 /**
  * Stops the muxer.
  * Once the muxer stops, it can not be restarted.
  */
-media_status_t AMediaMuxer_stop(AMediaMuxer*);
+media_status_t AMediaMuxer_stop(AMediaMuxer*) __INTRODUCED_IN(21);
 
 /**
  * Writes an encoded sample into the muxer.
@@ -119,7 +120,8 @@ media_status_t AMediaMuxer_stop(AMediaMuxer*);
  * by the encoder.)
  */
 media_status_t AMediaMuxer_writeSampleData(AMediaMuxer *muxer,
-        size_t trackIdx, const uint8_t *data, const AMediaCodecBufferInfo *info);
+        size_t trackIdx, const uint8_t *data,
+        const AMediaCodecBufferInfo *info) __INTRODUCED_IN(21);
 
 #endif /* __ANDROID_API__ >= 21 */
 

@@ -60,7 +60,7 @@ typedef uint64_t net_handle_t;
  * on failure with an appropriate errno value set.
  */
 
-#if __ANDROID_API__ >= 24
+#if __ANDROID_API__ >= 23
 
 /**
  * Set the network to be used by the given socket file descriptor.
@@ -70,7 +70,7 @@ typedef uint64_t net_handle_t;
  * This is the equivalent of: [android.net.Network#bindSocket()](https://developer.android.com/reference/android/net/Network.html#bindSocket(java.net.Socket))
  *
  */
-int android_setsocknetwork(net_handle_t network, int fd);
+int android_setsocknetwork(net_handle_t network, int fd) __INTRODUCED_IN(23);
 
 
 /**
@@ -87,7 +87,7 @@ int android_setsocknetwork(net_handle_t network, int fd);
  * This is the equivalent of: [android.net.ConnectivityManager#setProcessDefaultNetwork()](https://developer.android.com/reference/android/net/ConnectivityManager.html#setProcessDefaultNetwork(android.net.Network))
  *
  */
-int android_setprocnetwork(net_handle_t network);
+int android_setprocnetwork(net_handle_t network) __INTRODUCED_IN(23);
 
 
 /**
@@ -106,9 +106,9 @@ int android_setprocnetwork(net_handle_t network);
  */
 int android_getaddrinfofornetwork(net_handle_t network,
         const char *node, const char *service,
-        const struct addrinfo *hints, struct addrinfo **res);
+        const struct addrinfo *hints, struct addrinfo **res) __INTRODUCED_IN(23);
 
-#endif /* __ANDROID_API__ >= 24 */
+#endif /* __ANDROID_API__ >= 23 */
 
 __END_DECLS
 

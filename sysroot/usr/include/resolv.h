@@ -59,6 +59,13 @@ int res_mkquery(int __opcode, const char* __domain_name, int __class, int __type
 int res_query(const char* __name, int __class, int __type, u_char* __answer, int __answer_size);
 int res_search(const char* __name, int __class, int __type, u_char* __answer, int __answer_size);
 
+#define res_randomid __res_randomid
+
+#if __ANDROID_API__ >= __ANDROID_API_FUTURE__
+u_int __res_randomid(void) __INTRODUCED_IN_FUTURE;
+#endif /* __ANDROID_API__ >= __ANDROID_API_FUTURE__ */
+
+
 __END_DECLS
 
 #endif

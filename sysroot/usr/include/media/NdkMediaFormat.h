@@ -48,126 +48,126 @@ typedef struct AMediaFormat AMediaFormat;
 
 #if __ANDROID_API__ >= 21
 
-AMediaFormat *AMediaFormat_new();
-media_status_t AMediaFormat_delete(AMediaFormat*);
+AMediaFormat *AMediaFormat_new() __INTRODUCED_IN(21);
+media_status_t AMediaFormat_delete(AMediaFormat*) __INTRODUCED_IN(21);
 
 /**
  * Human readable representation of the format. The returned string is owned by the format,
  * and remains valid until the next call to toString, or until the format is deleted.
  */
-const char* AMediaFormat_toString(AMediaFormat*);
+const char* AMediaFormat_toString(AMediaFormat*) __INTRODUCED_IN(21);
 
-bool AMediaFormat_getInt32(AMediaFormat*, const char *name, int32_t *out);
-bool AMediaFormat_getInt64(AMediaFormat*, const char *name, int64_t *out);
-bool AMediaFormat_getFloat(AMediaFormat*, const char *name, float *out);
-bool AMediaFormat_getSize(AMediaFormat*, const char *name, size_t *out);
+bool AMediaFormat_getInt32(AMediaFormat*, const char *name, int32_t *out) __INTRODUCED_IN(21);
+bool AMediaFormat_getInt64(AMediaFormat*, const char *name, int64_t *out) __INTRODUCED_IN(21);
+bool AMediaFormat_getFloat(AMediaFormat*, const char *name, float *out) __INTRODUCED_IN(21);
+bool AMediaFormat_getSize(AMediaFormat*, const char *name, size_t *out) __INTRODUCED_IN(21);
 /**
  * The returned data is owned by the format and remains valid as long as the named entry
  * is part of the format.
  */
-bool AMediaFormat_getBuffer(AMediaFormat*, const char *name, void** data, size_t *size);
+bool AMediaFormat_getBuffer(AMediaFormat*, const char *name, void** data, size_t *size) __INTRODUCED_IN(21);
 /**
  * The returned string is owned by the format, and remains valid until the next call to getString,
  * or until the format is deleted.
  */
-bool AMediaFormat_getString(AMediaFormat*, const char *name, const char **out);
+bool AMediaFormat_getString(AMediaFormat*, const char *name, const char **out) __INTRODUCED_IN(21);
 
 
-void AMediaFormat_setInt32(AMediaFormat*, const char* name, int32_t value);
-void AMediaFormat_setInt64(AMediaFormat*, const char* name, int64_t value);
-void AMediaFormat_setFloat(AMediaFormat*, const char* name, float value);
+void AMediaFormat_setInt32(AMediaFormat*, const char* name, int32_t value) __INTRODUCED_IN(21);
+void AMediaFormat_setInt64(AMediaFormat*, const char* name, int64_t value) __INTRODUCED_IN(21);
+void AMediaFormat_setFloat(AMediaFormat*, const char* name, float value) __INTRODUCED_IN(21);
 /**
  * The provided string is copied into the format.
  */
-void AMediaFormat_setString(AMediaFormat*, const char* name, const char* value);
+void AMediaFormat_setString(AMediaFormat*, const char* name, const char* value) __INTRODUCED_IN(21);
 /**
  * The provided data is copied into the format.
  */
-void AMediaFormat_setBuffer(AMediaFormat*, const char* name, void* data, size_t size);
+void AMediaFormat_setBuffer(AMediaFormat*, const char* name, void* data, size_t size) __INTRODUCED_IN(21);
 
 
 
 /**
  * XXX should these be ints/enums that we look up in a table as needed?
  */
-extern const char* AMEDIAFORMAT_KEY_AAC_DRC_ATTENUATION_FACTOR;
-extern const char* AMEDIAFORMAT_KEY_AAC_DRC_BOOST_FACTOR;
-extern const char* AMEDIAFORMAT_KEY_AAC_DRC_HEAVY_COMPRESSION;
-extern const char* AMEDIAFORMAT_KEY_AAC_DRC_TARGET_REFERENCE_LEVEL;
-extern const char* AMEDIAFORMAT_KEY_AAC_ENCODED_TARGET_LEVEL;
-extern const char* AMEDIAFORMAT_KEY_AAC_MAX_OUTPUT_CHANNEL_COUNT;
-extern const char* AMEDIAFORMAT_KEY_AAC_PROFILE;
-extern const char* AMEDIAFORMAT_KEY_AAC_SBR_MODE;
-extern const char* AMEDIAFORMAT_KEY_AUDIO_SESSION_ID;
-extern const char* AMEDIAFORMAT_KEY_BITRATE_MODE;
-extern const char* AMEDIAFORMAT_KEY_BIT_RATE;
-extern const char* AMEDIAFORMAT_KEY_CAPTURE_RATE;
-extern const char* AMEDIAFORMAT_KEY_CHANNEL_COUNT;
-extern const char* AMEDIAFORMAT_KEY_CHANNEL_MASK;
-extern const char* AMEDIAFORMAT_KEY_COLOR_FORMAT;
-extern const char* AMEDIAFORMAT_KEY_COLOR_RANGE;
-extern const char* AMEDIAFORMAT_KEY_COLOR_STANDARD;
-extern const char* AMEDIAFORMAT_KEY_COLOR_TRANSFER;
-extern const char* AMEDIAFORMAT_KEY_COMPLEXITY;
-extern const char* AMEDIAFORMAT_KEY_CSD;
-extern const char* AMEDIAFORMAT_KEY_CSD_0;
-extern const char* AMEDIAFORMAT_KEY_CSD_1;
-extern const char* AMEDIAFORMAT_KEY_CSD_2;
-extern const char* AMEDIAFORMAT_KEY_DISPLAY_CROP;
-extern const char* AMEDIAFORMAT_KEY_DISPLAY_HEIGHT;
-extern const char* AMEDIAFORMAT_KEY_DISPLAY_WIDTH;
-extern const char* AMEDIAFORMAT_KEY_DURATION;
-extern const char* AMEDIAFORMAT_KEY_FLAC_COMPRESSION_LEVEL;
-extern const char* AMEDIAFORMAT_KEY_FRAME_RATE;
-extern const char* AMEDIAFORMAT_KEY_GRID_COLUMNS;
-extern const char* AMEDIAFORMAT_KEY_GRID_ROWS;
-extern const char* AMEDIAFORMAT_KEY_HDR_STATIC_INFO;
-extern const char* AMEDIAFORMAT_KEY_HEIGHT;
-extern const char* AMEDIAFORMAT_KEY_INTRA_REFRESH_PERIOD;
-extern const char* AMEDIAFORMAT_KEY_IS_ADTS;
-extern const char* AMEDIAFORMAT_KEY_IS_AUTOSELECT;
-extern const char* AMEDIAFORMAT_KEY_IS_DEFAULT;
-extern const char* AMEDIAFORMAT_KEY_IS_FORCED_SUBTITLE;
-extern const char* AMEDIAFORMAT_KEY_I_FRAME_INTERVAL;
-extern const char* AMEDIAFORMAT_KEY_LANGUAGE;
-extern const char* AMEDIAFORMAT_KEY_LATENCY;
-extern const char* AMEDIAFORMAT_KEY_LEVEL;
-extern const char* AMEDIAFORMAT_KEY_MAX_HEIGHT;
-extern const char* AMEDIAFORMAT_KEY_MAX_INPUT_SIZE;
-extern const char* AMEDIAFORMAT_KEY_MAX_WIDTH;
-extern const char* AMEDIAFORMAT_KEY_MIME;
-extern const char* AMEDIAFORMAT_KEY_MPEG_USER_DATA;
-extern const char* AMEDIAFORMAT_KEY_OPERATING_RATE;
-extern const char* AMEDIAFORMAT_KEY_PCM_ENCODING;
-extern const char* AMEDIAFORMAT_KEY_PRIORITY;
-extern const char* AMEDIAFORMAT_KEY_PROFILE;
-extern const char* AMEDIAFORMAT_KEY_PUSH_BLANK_BUFFERS_ON_STOP;
-extern const char* AMEDIAFORMAT_KEY_REPEAT_PREVIOUS_FRAME_AFTER;
-extern const char* AMEDIAFORMAT_KEY_ROTATION;
-extern const char* AMEDIAFORMAT_KEY_SAMPLE_RATE;
-extern const char* AMEDIAFORMAT_KEY_SEI;
-extern const char* AMEDIAFORMAT_KEY_SLICE_HEIGHT;
-extern const char* AMEDIAFORMAT_KEY_STRIDE;
-extern const char* AMEDIAFORMAT_KEY_TEMPORAL_LAYER_ID;
-extern const char* AMEDIAFORMAT_KEY_TEMPORAL_LAYERING;
-extern const char* AMEDIAFORMAT_KEY_TILE_HEIGHT;
-extern const char* AMEDIAFORMAT_KEY_TILE_WIDTH;
-extern const char* AMEDIAFORMAT_KEY_TIME_US;
-extern const char* AMEDIAFORMAT_KEY_TRACK_ID;
-extern const char* AMEDIAFORMAT_KEY_TRACK_INDEX;
-extern const char* AMEDIAFORMAT_KEY_WIDTH;
+extern const char* AMEDIAFORMAT_KEY_AAC_DRC_ATTENUATION_FACTOR __INTRODUCED_IN(28);
+extern const char* AMEDIAFORMAT_KEY_AAC_DRC_BOOST_FACTOR __INTRODUCED_IN(28);
+extern const char* AMEDIAFORMAT_KEY_AAC_DRC_HEAVY_COMPRESSION __INTRODUCED_IN(28);
+extern const char* AMEDIAFORMAT_KEY_AAC_DRC_TARGET_REFERENCE_LEVEL __INTRODUCED_IN(28);
+extern const char* AMEDIAFORMAT_KEY_AAC_ENCODED_TARGET_LEVEL __INTRODUCED_IN(28);
+extern const char* AMEDIAFORMAT_KEY_AAC_MAX_OUTPUT_CHANNEL_COUNT __INTRODUCED_IN(28);
+extern const char* AMEDIAFORMAT_KEY_AAC_PROFILE __INTRODUCED_IN(21);
+extern const char* AMEDIAFORMAT_KEY_AAC_SBR_MODE __INTRODUCED_IN(28);
+extern const char* AMEDIAFORMAT_KEY_AUDIO_SESSION_ID __INTRODUCED_IN(28);
+extern const char* AMEDIAFORMAT_KEY_BITRATE_MODE __INTRODUCED_IN(28);
+extern const char* AMEDIAFORMAT_KEY_BIT_RATE __INTRODUCED_IN(21);
+extern const char* AMEDIAFORMAT_KEY_CAPTURE_RATE __INTRODUCED_IN(28);
+extern const char* AMEDIAFORMAT_KEY_CHANNEL_COUNT __INTRODUCED_IN(21);
+extern const char* AMEDIAFORMAT_KEY_CHANNEL_MASK __INTRODUCED_IN(21);
+extern const char* AMEDIAFORMAT_KEY_COLOR_FORMAT __INTRODUCED_IN(21);
+extern const char* AMEDIAFORMAT_KEY_COLOR_RANGE __INTRODUCED_IN(28);
+extern const char* AMEDIAFORMAT_KEY_COLOR_STANDARD __INTRODUCED_IN(28);
+extern const char* AMEDIAFORMAT_KEY_COLOR_TRANSFER __INTRODUCED_IN(28);
+extern const char* AMEDIAFORMAT_KEY_COMPLEXITY __INTRODUCED_IN(28);
+extern const char* AMEDIAFORMAT_KEY_CSD __INTRODUCED_IN(28);
+extern const char* AMEDIAFORMAT_KEY_CSD_0 __INTRODUCED_IN(28);
+extern const char* AMEDIAFORMAT_KEY_CSD_1 __INTRODUCED_IN(28);
+extern const char* AMEDIAFORMAT_KEY_CSD_2 __INTRODUCED_IN(28);
+extern const char* AMEDIAFORMAT_KEY_DISPLAY_CROP __INTRODUCED_IN(28);
+extern const char* AMEDIAFORMAT_KEY_DISPLAY_HEIGHT __INTRODUCED_IN(28);
+extern const char* AMEDIAFORMAT_KEY_DISPLAY_WIDTH __INTRODUCED_IN(28);
+extern const char* AMEDIAFORMAT_KEY_DURATION __INTRODUCED_IN(21);
+extern const char* AMEDIAFORMAT_KEY_FLAC_COMPRESSION_LEVEL __INTRODUCED_IN(21);
+extern const char* AMEDIAFORMAT_KEY_FRAME_RATE __INTRODUCED_IN(21);
+extern const char* AMEDIAFORMAT_KEY_GRID_COLUMNS __INTRODUCED_IN(28);
+extern const char* AMEDIAFORMAT_KEY_GRID_ROWS __INTRODUCED_IN(28);
+extern const char* AMEDIAFORMAT_KEY_HDR_STATIC_INFO __INTRODUCED_IN(28);
+extern const char* AMEDIAFORMAT_KEY_HEIGHT __INTRODUCED_IN(21);
+extern const char* AMEDIAFORMAT_KEY_INTRA_REFRESH_PERIOD __INTRODUCED_IN(28);
+extern const char* AMEDIAFORMAT_KEY_IS_ADTS __INTRODUCED_IN(21);
+extern const char* AMEDIAFORMAT_KEY_IS_AUTOSELECT __INTRODUCED_IN(21);
+extern const char* AMEDIAFORMAT_KEY_IS_DEFAULT __INTRODUCED_IN(21);
+extern const char* AMEDIAFORMAT_KEY_IS_FORCED_SUBTITLE __INTRODUCED_IN(21);
+extern const char* AMEDIAFORMAT_KEY_I_FRAME_INTERVAL __INTRODUCED_IN(21);
+extern const char* AMEDIAFORMAT_KEY_LANGUAGE __INTRODUCED_IN(21);
+extern const char* AMEDIAFORMAT_KEY_LATENCY __INTRODUCED_IN(28);
+extern const char* AMEDIAFORMAT_KEY_LEVEL __INTRODUCED_IN(28);
+extern const char* AMEDIAFORMAT_KEY_MAX_HEIGHT __INTRODUCED_IN(21);
+extern const char* AMEDIAFORMAT_KEY_MAX_INPUT_SIZE __INTRODUCED_IN(21);
+extern const char* AMEDIAFORMAT_KEY_MAX_WIDTH __INTRODUCED_IN(21);
+extern const char* AMEDIAFORMAT_KEY_MIME __INTRODUCED_IN(21);
+extern const char* AMEDIAFORMAT_KEY_MPEG_USER_DATA __INTRODUCED_IN(28);
+extern const char* AMEDIAFORMAT_KEY_OPERATING_RATE __INTRODUCED_IN(28);
+extern const char* AMEDIAFORMAT_KEY_PCM_ENCODING __INTRODUCED_IN(28);
+extern const char* AMEDIAFORMAT_KEY_PRIORITY __INTRODUCED_IN(28);
+extern const char* AMEDIAFORMAT_KEY_PROFILE __INTRODUCED_IN(28);
+extern const char* AMEDIAFORMAT_KEY_PUSH_BLANK_BUFFERS_ON_STOP __INTRODUCED_IN(21);
+extern const char* AMEDIAFORMAT_KEY_REPEAT_PREVIOUS_FRAME_AFTER __INTRODUCED_IN(21);
+extern const char* AMEDIAFORMAT_KEY_ROTATION __INTRODUCED_IN(28);
+extern const char* AMEDIAFORMAT_KEY_SAMPLE_RATE __INTRODUCED_IN(21);
+extern const char* AMEDIAFORMAT_KEY_SEI __INTRODUCED_IN(28);
+extern const char* AMEDIAFORMAT_KEY_SLICE_HEIGHT __INTRODUCED_IN(28);
+extern const char* AMEDIAFORMAT_KEY_STRIDE __INTRODUCED_IN(21);
+extern const char* AMEDIAFORMAT_KEY_TEMPORAL_LAYER_ID __INTRODUCED_IN(28);
+extern const char* AMEDIAFORMAT_KEY_TEMPORAL_LAYERING __INTRODUCED_IN(28);
+extern const char* AMEDIAFORMAT_KEY_TILE_HEIGHT __INTRODUCED_IN(28);
+extern const char* AMEDIAFORMAT_KEY_TILE_WIDTH __INTRODUCED_IN(28);
+extern const char* AMEDIAFORMAT_KEY_TIME_US __INTRODUCED_IN(28);
+extern const char* AMEDIAFORMAT_KEY_TRACK_ID __INTRODUCED_IN(28);
+extern const char* AMEDIAFORMAT_KEY_TRACK_INDEX __INTRODUCED_IN(28);
+extern const char* AMEDIAFORMAT_KEY_WIDTH __INTRODUCED_IN(21);
 
 #endif /* __ANDROID_API__ >= 21 */
 
 #if __ANDROID_API__ >= 28
-bool AMediaFormat_getDouble(AMediaFormat*, const char *name, double *out);
+bool AMediaFormat_getDouble(AMediaFormat*, const char *name, double *out) __INTRODUCED_IN(28);
 bool AMediaFormat_getRect(AMediaFormat*, const char *name,
-                          int32_t *left, int32_t *top, int32_t *right, int32_t *bottom);
+        int32_t *left, int32_t *top, int32_t *right, int32_t *bottom) __INTRODUCED_IN(28);
 
-void AMediaFormat_setDouble(AMediaFormat*, const char* name, double value);
-void AMediaFormat_setSize(AMediaFormat*, const char* name, size_t value);
+void AMediaFormat_setDouble(AMediaFormat*, const char* name, double value) __INTRODUCED_IN(28);
+void AMediaFormat_setSize(AMediaFormat*, const char* name, size_t value) __INTRODUCED_IN(28);
 void AMediaFormat_setRect(AMediaFormat*, const char* name,
-                          int32_t left, int32_t top, int32_t right, int32_t bottom);
+        int32_t left, int32_t top, int32_t right, int32_t bottom) __INTRODUCED_IN(28);
 #endif /* __ANDROID_API__ >= 28 */
 
 __END_DECLS

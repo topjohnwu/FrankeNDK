@@ -178,7 +178,7 @@ int32_t ANativeWindow_lock(ANativeWindow* window, ANativeWindow_Buffer* outBuffe
  */
 int32_t ANativeWindow_unlockAndPost(ANativeWindow* window);
 
-#if __ANDROID_API__ >= __ANDROID_API_O__
+#if __ANDROID_API__ >= 26
 
 /**
  * Set a transform that will be applied to future buffers posted to the window.
@@ -186,11 +186,11 @@ int32_t ANativeWindow_unlockAndPost(ANativeWindow* window);
  * \param transform combination of {@link ANativeWindowTransform} flags
  * \return 0 for success, or -EINVAL if \p transform is invalid
  */
-int32_t ANativeWindow_setBuffersTransform(ANativeWindow* window, int32_t transform);
+int32_t ANativeWindow_setBuffersTransform(ANativeWindow* window, int32_t transform) __INTRODUCED_IN(26);
 
-#endif // __ANDROID_API__ >= __ANDROID_API_O__
+#endif // __ANDROID_API__ >= 26
 
-#if __ANDROID_API__ >= __ANDROID_API_P__
+#if __ANDROID_API__ >= 28
 
 /**
  * All buffers queued after this call will be associated with the dataSpace
@@ -206,16 +206,16 @@ int32_t ANativeWindow_setBuffersTransform(ANativeWindow* window, int32_t transfo
  * \return 0 for success, -EINVAL if window is invalid or the dataspace is not
  * supported.
  */
-int32_t ANativeWindow_setBuffersDataSpace(ANativeWindow* window, int32_t dataSpace);
+int32_t ANativeWindow_setBuffersDataSpace(ANativeWindow* window, int32_t dataSpace) __INTRODUCED_IN(28);
 
 /**
  * Get the dataspace of the buffers in window.
  * \return the dataspace of buffers in window, ADATASPACE_UNKNOWN is returned if
  * dataspace is unknown, or -EINVAL if window is invalid.
  */
-int32_t ANativeWindow_getBuffersDataSpace(ANativeWindow* window);
+int32_t ANativeWindow_getBuffersDataSpace(ANativeWindow* window) __INTRODUCED_IN(28);
 
-#endif // __ANDROID_API__ >= __ANDROID_API_P__
+#endif // __ANDROID_API__ >= 28
 
 #ifdef __cplusplus
 };

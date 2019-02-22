@@ -21,6 +21,7 @@
 
 /**
  * @file sharedmem_jni.h
+ * @brief Shared memory buffers that can be shared across process.
  */
 
 #ifndef ANDROID_SHARED_MEMORY_JNI_H
@@ -29,6 +30,7 @@
 #include <jni.h>
 #include <android/sharedmem.h>
 #include <stddef.h>
+#include <sys/cdefs.h>
 
 /******************************************************************
  *
@@ -46,15 +48,11 @@
  *   - DO NOT CHANGE THE LAYOUT OR SIZE OF STRUCTURES
  */
 
-/**
- * Structures and functions for a shared memory buffer that can be shared across process.
- */
-
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#if __ANDROID_API__ >= __ANDROID_API_O_MR1__
+#if __ANDROID_API__ >= 27
 
 /**
  * Returns a dup'd FD from the given Java android.os.SharedMemory object. The returned file
@@ -64,15 +62,17 @@ extern "C" {
  *
  * Use close() to release the shared memory region.
  *
+ * Available since API level 27.
+ *
  * \param env The JNIEnv* pointer
  * \param sharedMemory The Java android.os.SharedMemory object
  * \return file descriptor that denotes the shared memory; -1 if the shared memory object is
  *      already closed, if the JNIEnv or jobject is NULL, or if there are too many open file
  *      descriptors (errno=EMFILE)
  */
-int ASharedMemory_dupFromJava(JNIEnv* env, jobject sharedMemory);
+int ASharedMemory_dupFromJava(JNIEnv* env, jobject sharedMemory) __INTRODUCED_IN(27);
 
-#endif
+#endif // __ANDROID_API__ >= 27
 
 #ifdef __cplusplus
 };

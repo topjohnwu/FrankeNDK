@@ -176,7 +176,7 @@ typedef ACameraDevice_StateCallbacks ACameraDevice_stateCallbacks;
  *         <li>{@link ACAMERA_OK} if the method call succeeds.</li>
  *         <li>{@link ACAMERA_ERROR_INVALID_PARAMETER} if device is NULL.</li></ul>
  */
-camera_status_t ACameraDevice_close(ACameraDevice* device);
+camera_status_t ACameraDevice_close(ACameraDevice* device) __INTRODUCED_IN(24);
 
 /**
  * Return the camera id associated with this camera device.
@@ -187,7 +187,7 @@ camera_status_t ACameraDevice_close(ACameraDevice* device);
  * delete/free by the application. Also the returned string must not be used after the device
  * has been closed.
  */
-const char* ACameraDevice_getId(const ACameraDevice* device);
+const char* ACameraDevice_getId(const ACameraDevice* device) __INTRODUCED_IN(24);
 
 typedef enum {
     /**
@@ -290,7 +290,7 @@ typedef enum {
  */
 camera_status_t ACameraDevice_createCaptureRequest(
         const ACameraDevice* device, ACameraDevice_request_template templateId,
-        /*out*/ACaptureRequest** request);
+        /*out*/ACaptureRequest** request) __INTRODUCED_IN(24);
 
 
 typedef struct ACaptureSessionOutputContainer ACaptureSessionOutputContainer;
@@ -313,7 +313,7 @@ typedef struct ACaptureSessionOutput ACaptureSessionOutput;
  *         <li>{@link ACAMERA_ERROR_INVALID_PARAMETER} if container is NULL.</li></ul>
  */
 camera_status_t ACaptureSessionOutputContainer_create(
-        /*out*/ACaptureSessionOutputContainer** container);
+        /*out*/ACaptureSessionOutputContainer** container) __INTRODUCED_IN(24);
 
 /**
  * Free a capture session output container.
@@ -322,7 +322,8 @@ camera_status_t ACaptureSessionOutputContainer_create(
  *
  * @see ACaptureSessionOutputContainer_create
  */
-void            ACaptureSessionOutputContainer_free(ACaptureSessionOutputContainer* container);
+void            ACaptureSessionOutputContainer_free(ACaptureSessionOutputContainer* container)
+        __INTRODUCED_IN(24);
 
 /**
  * Create a ACaptureSessionOutput object.
@@ -344,7 +345,7 @@ void            ACaptureSessionOutputContainer_free(ACaptureSessionOutputContain
  * @see ACaptureSessionOutputContainer_add
  */
 camera_status_t ACaptureSessionOutput_create(
-        ANativeWindow* anw, /*out*/ACaptureSessionOutput** output);
+        ANativeWindow* anw, /*out*/ACaptureSessionOutput** output) __INTRODUCED_IN(24);
 
 /**
  * Free a ACaptureSessionOutput object.
@@ -353,7 +354,7 @@ camera_status_t ACaptureSessionOutput_create(
  *
  * @see ACaptureSessionOutput_create
  */
-void            ACaptureSessionOutput_free(ACaptureSessionOutput* output);
+void            ACaptureSessionOutput_free(ACaptureSessionOutput* output) __INTRODUCED_IN(24);
 
 /**
  * Add an {@link ACaptureSessionOutput} object to {@link ACaptureSessionOutputContainer}.
@@ -366,7 +367,8 @@ void            ACaptureSessionOutput_free(ACaptureSessionOutput* output);
  *         <li>{@link ACAMERA_ERROR_INVALID_PARAMETER} if container or output is NULL.</li></ul>
  */
 camera_status_t ACaptureSessionOutputContainer_add(
-        ACaptureSessionOutputContainer* container, const ACaptureSessionOutput* output);
+        ACaptureSessionOutputContainer* container, const ACaptureSessionOutput* output)
+        __INTRODUCED_IN(24);
 
 /**
  * Remove an {@link ACaptureSessionOutput} object from {@link ACaptureSessionOutputContainer}.
@@ -382,7 +384,8 @@ camera_status_t ACaptureSessionOutputContainer_add(
  *         <li>{@link ACAMERA_ERROR_INVALID_PARAMETER} if container or output is NULL.</li></ul>
  */
 camera_status_t ACaptureSessionOutputContainer_remove(
-        ACaptureSessionOutputContainer* container, const ACaptureSessionOutput* output);
+        ACaptureSessionOutputContainer* container, const ACaptureSessionOutput* output)
+        __INTRODUCED_IN(24);
 
 /**
  * Create a new camera capture session by providing the target output set of {@link ANativeWindow}
@@ -663,7 +666,7 @@ camera_status_t ACameraDevice_createCaptureSession(
         ACameraDevice* device,
         const ACaptureSessionOutputContainer*       outputs,
         const ACameraCaptureSession_stateCallbacks* callbacks,
-        /*out*/ACameraCaptureSession** session);
+        /*out*/ACameraCaptureSession** session) __INTRODUCED_IN(24);
 
 #endif /* __ANDROID_API__ >= 24 */
 
@@ -691,7 +694,7 @@ camera_status_t ACameraDevice_createCaptureSession(
  * @see ACaptureSessionOutputContainer_add
  */
 camera_status_t ACaptureSessionSharedOutput_create(
-        ANativeWindow* anw, /*out*/ACaptureSessionOutput** output);
+        ANativeWindow* anw, /*out*/ACaptureSessionOutput** output) __INTRODUCED_IN(28);
 
 /**
  * Add a native window to shared ACaptureSessionOutput.
@@ -708,7 +711,8 @@ camera_status_t ACaptureSessionSharedOutput_create(
  *             window associated with ACaptureSessionOutput; or anw is already present inside
  *             ACaptureSessionOutput.</li></ul>
  */
-camera_status_t ACaptureSessionSharedOutput_add(ACaptureSessionOutput *output, ANativeWindow *anw);
+camera_status_t ACaptureSessionSharedOutput_add(ACaptureSessionOutput *output,
+        ANativeWindow *anw) __INTRODUCED_IN(28);
 
 /**
  * Remove a native window from shared ACaptureSessionOutput.
@@ -724,7 +728,7 @@ camera_status_t ACaptureSessionSharedOutput_add(ACaptureSessionOutput *output, A
  *             ACaptureSessionOutput.</li></ul>
  */
 camera_status_t ACaptureSessionSharedOutput_remove(ACaptureSessionOutput *output,
-        ANativeWindow* anw);
+        ANativeWindow* anw) __INTRODUCED_IN(28);
 
 /**
  * Create a new camera capture session similar to {@link ACameraDevice_createCaptureSession}. This
@@ -757,7 +761,7 @@ camera_status_t ACameraDevice_createCaptureSessionWithSessionParameters(
         const ACaptureSessionOutputContainer* outputs,
         const ACaptureRequest* sessionParameters,
         const ACameraCaptureSession_stateCallbacks* callbacks,
-        /*out*/ACameraCaptureSession** session);
+        /*out*/ACameraCaptureSession** session) __INTRODUCED_IN(28);
 
 #endif /* __ANDROID_API__ >= 28 */
 
