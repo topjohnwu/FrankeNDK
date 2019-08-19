@@ -12,6 +12,7 @@
 #ifndef LLVM_FUZZER_INTERNAL_H
 #define LLVM_FUZZER_INTERNAL_H
 
+#include "FuzzerDataFlowTrace.h"
 #include "FuzzerDefs.h"
 #include "FuzzerExtFunctions.h"
 #include "FuzzerInterface.h"
@@ -63,17 +64,20 @@ public:
   static void StaticExitCallback();
   static void StaticInterruptCallback();
   static void StaticFileSizeExceedCallback();
+  static void StaticGracefulExitCallback();
 
   void ExecuteCallback(const uint8_t *Data, size_t Size);
+  void CheckForUnstableCounters(const uint8_t *Data, size_t Size);
   bool RunOne(const uint8_t *Data, size_t Size, bool MayDeleteFile = false,
-              InputInfo *II = nullptr);
+              InputInfo *II = nullptr, bool *FoundUniqFeatures = nullptr);
 
   // Merge Corpora[1:] into Corpora[0].
   void Merge(const Vector<std::string> &Corpora);
   void CrashResistantMerge(const Vector<std::string> &Args,
                            const Vector<std::string> &Corpora,
                            const char *CoverageSummaryInputPathOrNull,
-                           const char *CoverageSummaryOutputPathOrNull);
+                           const char *CoverageSummaryOutputPathOrNull,
+                           const char *MergeControlFilePathOrNull);
   void CrashResistantMergeInternalStep(const std::string &ControlFilePath);
   MutationDispatcher &GetMD() { return MD; }
   void PrintFinalStats();
@@ -93,9 +97,11 @@ private:
   void AlarmCallback();
   void CrashCallback();
   void ExitCallback();
+  void MaybeExitGracefully();
   void CrashOnOverwrittenData();
   void InterruptCallback();
   void MutateAndTestOne();
+  void PurgeAllocator();
   void ReportNewCoverage(InputInfo *II, const Unit &U);
   void PrintPulseAndReportSlowInput(const uint8_t *Data, size_t Size);
   void WriteToOutputCorpus(const Unit &U);
@@ -112,22 +118,24 @@ private:
   uint8_t *CurrentUnitData = nullptr;
   std::atomic<size_t> CurrentUnitSize;
   uint8_t BaseSha1[kSHA1NumBytes];  // Checksum of the base unit.
-  bool RunningCB = false;
+
+  bool GracefulExitRequested = false;
 
   size_t TotalNumberOfRuns = 0;
   size_t NumberOfNewUnitsAdded = 0;
 
   size_t LastCorpusUpdateRun = 0;
-  system_clock::time_point LastCorpusUpdateTime = system_clock::now();
-
 
   bool HasMoreMallocsThanFrees = false;
   size_t NumberOfLeakDetectionAttempts = 0;
+
+  system_clock::time_point LastAllocatorPurgeAttemptTime = system_clock::now();
 
   UserCallback CB;
   InputCorpus &Corpus;
   MutationDispatcher &MD;
   FuzzingOptions Options;
+  DataFlowTrace DFT;
 
   system_clock::time_point ProcessStartTime = system_clock::now();
   system_clock::time_point UnitStartTime, UnitStopTime;
@@ -142,6 +150,28 @@ private:
 
   // Need to know our own thread.
   static thread_local bool IsMyThread;
+};
+
+struct ScopedEnableMsanInterceptorChecks {
+  ScopedEnableMsanInterceptorChecks() {
+    if (EF->__msan_scoped_enable_interceptor_checks)
+      EF->__msan_scoped_enable_interceptor_checks();
+  }
+  ~ScopedEnableMsanInterceptorChecks() {
+    if (EF->__msan_scoped_disable_interceptor_checks)
+      EF->__msan_scoped_disable_interceptor_checks();
+  }
+};
+
+struct ScopedDisableMsanInterceptorChecks {
+  ScopedDisableMsanInterceptorChecks() {
+    if (EF->__msan_scoped_disable_interceptor_checks)
+      EF->__msan_scoped_disable_interceptor_checks();
+  }
+  ~ScopedDisableMsanInterceptorChecks() {
+    if (EF->__msan_scoped_enable_interceptor_checks)
+      EF->__msan_scoped_enable_interceptor_checks();
+  }
 };
 
 } // namespace fuzzer

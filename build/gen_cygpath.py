@@ -19,6 +19,8 @@ We don't just call cygpath (unless directed by NDK_USE_CYGPATH=1) because we
 have to call this very often and doing so would be very slow. By doing this in
 make, we can be much faster.
 """
+from __future__ import print_function
+
 import posixpath
 import re
 import sys
@@ -74,7 +76,7 @@ def make_cygpath_function(mounts):
     """
     # We're building a bunch of nested patsubst calls. Once we've written each
     # of the calls, we pass the function input to the inner most call.
-    if len(mounts) == 0:
+    if not mounts:
         return '$1'
 
     cyg_path, win_path = mounts[0]
@@ -93,7 +95,7 @@ def main():
     # determine what mappings to make.
     mount_output = sys.stdin.read()
     mounts = get_mounts(mount_output)
-    print make_cygpath_function(mounts)
+    print(make_cygpath_function(mounts))
 
 
 if __name__ == '__main__':

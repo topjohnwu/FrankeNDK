@@ -21,7 +21,7 @@
 """
 import subprocess
 import sys
-from utils import *
+from utils import AdbHelper, disable_debug_log, get_target_binary_path
 
 def main():
     disable_debug_log()

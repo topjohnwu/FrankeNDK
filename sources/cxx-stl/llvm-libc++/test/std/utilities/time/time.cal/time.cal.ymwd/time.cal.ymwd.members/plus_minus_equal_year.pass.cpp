@@ -37,19 +37,17 @@ int main()
 {
     using year               = std::chrono::year;
     using month              = std::chrono::month;
-    using day                = std::chrono::day;
     using weekday            = std::chrono::weekday;
     using weekday_indexed    = std::chrono::weekday_indexed;
     using year_month_weekday = std::chrono::year_month_weekday;
     using years              = std::chrono::years;
-    using months             = std::chrono::months;
 
     ASSERT_NOEXCEPT(                               std::declval<year_month_weekday&>() += std::declval<years>());
     ASSERT_SAME_TYPE(year_month_weekday&, decltype(std::declval<year_month_weekday&>() += std::declval<years>()));
 
     ASSERT_NOEXCEPT(                               std::declval<year_month_weekday&>() -= std::declval<years>());
     ASSERT_SAME_TYPE(year_month_weekday&, decltype(std::declval<year_month_weekday&>() -= std::declval<years>()));
-    
+
     constexpr weekday Tuesday = std::chrono::Tuesday;
     constexpr month January = std::chrono::January;
 

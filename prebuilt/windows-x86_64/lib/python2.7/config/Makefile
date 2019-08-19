@@ -26,11 +26,11 @@ MODLIBS=        $(LOCALMODLIBS) $(BASEMODLIBS)
 
 # === Variables set by configure
 VERSION=	2.7
-srcdir=		/usr/local/google/buildbot/src/android/ndk-release-r17/toolchain/python/Python-2.7.5
-VPATH=		/usr/local/google/buildbot/src/android/ndk-release-r17/toolchain/python/Python-2.7.5
-MSYSVPATH=	/usr/local/google/buildbot/src/android/ndk-release-r17/toolchain/python/Python-2.7.5
-abs_srcdir=	/usr/local/google/buildbot/src/android/ndk-release-r17/toolchain/python/Python-2.7.5
-abs_builddir=	/usr/local/google/buildbot/src/android/ndk-release-r17/out/python/build-python-windows-x86_64-2.7.5
+srcdir=		/usr/local/google/buildbot/src/android/ndk-release-r20/toolchain/python/Python-2.7.5
+VPATH=		/usr/local/google/buildbot/src/android/ndk-release-r20/toolchain/python/Python-2.7.5
+MSYSVPATH=	/usr/local/google/buildbot/src/android/ndk-release-r20/toolchain/python/Python-2.7.5
+abs_srcdir=	/usr/local/google/buildbot/src/android/ndk-release-r20/toolchain/python/Python-2.7.5
+abs_builddir=	/usr/local/google/buildbot/src/android/ndk-release-r20/out/windows64/python/build-python-windows-x86_64-2.7.5
 build=		x86_64-pc-linux-gnu
 host=		x86_64-w64-mingw32
 
@@ -95,7 +95,7 @@ MACHDEP=	win32
 MULTIARCH=	
 
 # Install prefix for architecture-independent files
-prefix=		/usr/local/google/buildbot/src/android/ndk-release-r17/out/python/windows-x86_64/install/host-tools
+prefix=		/usr/local/google/buildbot/src/android/ndk-release-r20/out/windows64/python/windows-x86_64/install/host-tools
 
 # Install prefix for architecture-dependent files
 exec_prefix=	${prefix}
@@ -154,7 +154,7 @@ EXEMODE=	755
 FILEMODE=	644
 
 # configure script arguments
-CONFIG_ARGS=	 '--prefix=/usr/local/google/buildbot/src/android/ndk-release-r17/out/python/windows-x86_64/install/host-tools' '--build=x86_64-linux-gnu' '--host=x86_64-w64-mingw32' '--with-build-sysroot' '--disable-ipv6' 'build_alias=x86_64-linux-gnu' 'host_alias=x86_64-w64-mingw32' 'CC=x86_64-w64-mingw32-gcc' 'CFLAGS=-O2 -Os -fomit-frame-pointer -s -D__USE_MINGW_ANSI_STDIO=1 -static-libgcc' 'LDFLAGS= -static-libgcc'
+CONFIG_ARGS=	 '--prefix=/usr/local/google/buildbot/src/android/ndk-release-r20/out/windows64/python/windows-x86_64/install/host-tools' '--build=x86_64-linux-gnu' '--host=x86_64-w64-mingw32' '--with-build-sysroot' '--disable-ipv6' 'build_alias=x86_64-linux-gnu' 'host_alias=x86_64-w64-mingw32' 'CC=x86_64-w64-mingw32-gcc' 'CFLAGS=-O2 -Os -fomit-frame-pointer -s -D__USE_MINGW_ANSI_STDIO=1 -static-libgcc' 'LDFLAGS= -static-libgcc'
 
 
 # Subdirectories with code
@@ -195,7 +195,7 @@ UNICODE_OBJS=   Objects/unicodeobject.o Objects/unicodectype.o
 PYTHON=		python$(EXE)
 BUILDPYTHON=	python$(BUILDEXE)
 
-PYTHON_FOR_BUILD=_PYTHON_PROJECT_BASE=$(abs_builddir) _PYTHON_HOST_PLATFORM=$(_PYTHON_HOST_PLATFORM) PYTHONPATH=/usr/local/google/buildbot/src/android/ndk-release-r17/out/python/linux-x86_64/install/host-tools/lib/python2.7/lib-dynload:$(shell test -f pybuilddir.txt && echo $(abs_builddir)/`cat pybuilddir.txt`:)$(srcdir)/Lib:$(srcdir)/Lib/plat-$(MACHDEP) /usr/local/google/buildbot/src/android/ndk-release-r17/out/python/linux-x86_64/install/host-tools/bin/python2.7
+PYTHON_FOR_BUILD=_PYTHON_PROJECT_BASE=$(abs_builddir) _PYTHON_HOST_PLATFORM=$(_PYTHON_HOST_PLATFORM) PYTHONPATH=/usr/local/google/buildbot/src/android/ndk-release-r20/out/windows64/python/linux-x86_64/install/host-tools/lib/python2.7/lib-dynload:$(shell test -f pybuilddir.txt && echo $(abs_builddir)/`cat pybuilddir.txt`:)$(srcdir)/Lib:$(srcdir)/Lib/plat-$(MACHDEP) /usr/local/google/buildbot/src/android/ndk-release-r20/out/windows64/python/linux-x86_64/install/host-tools/bin/python2.7
 _PYTHON_HOST_PLATFORM=win32
 HOST_GNU_TYPE=  x86_64-w64-mingw32
 

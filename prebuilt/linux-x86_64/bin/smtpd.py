@@ -1,4 +1,4 @@
-#!/usr/local/google/buildbot/src/android/ndk-release-r17/out/python/linux-x86_64/install/host-tools/bin/python2.7
+#!/usr/local/google/buildbot/src/android/ndk-release-r20/out/linux/python/linux-x86_64/install/host-tools/bin/python2.7
 """An RFC 2821 smtp proxy.
 
 Usage: %(program)s [options] [localhost:localport [remotehost:remoteport]]

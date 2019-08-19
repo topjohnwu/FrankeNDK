@@ -21,6 +21,7 @@
 
 #include "vulkan/vulkan.h"
 
+#include <string>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -39,9 +40,9 @@ static std::unordered_map<uint64_t, uint64_t> unique_id_mapping;  // Map uniqueI
 
 struct TEMPLATE_STATE {
     VkDescriptorUpdateTemplateKHR desc_update_template;
-    safe_VkDescriptorUpdateTemplateCreateInfoKHR create_info;
+    safe_VkDescriptorUpdateTemplateCreateInfo create_info;
 
-    TEMPLATE_STATE(VkDescriptorUpdateTemplateKHR update_template, safe_VkDescriptorUpdateTemplateCreateInfoKHR *pCreateInfo)
+    TEMPLATE_STATE(VkDescriptorUpdateTemplateKHR update_template, safe_VkDescriptorUpdateTemplateCreateInfo *pCreateInfo)
         : desc_update_template(update_template), create_info(*pCreateInfo) {}
 };
 
@@ -50,12 +51,18 @@ struct instance_layer_data {
 
     debug_report_data *report_data;
     std::vector<VkDebugReportCallbackEXT> logging_callback;
+    std::vector<VkDebugUtilsMessengerEXT> logging_messenger;
     VkLayerInstanceDispatchTable dispatch_table = {};
+    std::unordered_map<VkDisplayKHR, uint64_t> display_id_reverse_mapping;  // Reverse map display handles
 
-    // The following are for keeping track of the temporary callbacks that can be used in vkCreateInstance and vkDestroyInstance:
-    uint32_t num_tmp_callbacks;
-    VkDebugReportCallbackCreateInfoEXT *tmp_dbg_create_infos;
-    VkDebugReportCallbackEXT *tmp_callbacks;
+    // The following are for keeping track of the temporary callbacks that can
+    // be used in vkCreateInstance and vkDestroyInstance:
+    uint32_t num_tmp_report_callbacks;
+    VkDebugReportCallbackCreateInfoEXT *tmp_report_create_infos;
+    VkDebugReportCallbackEXT *tmp_report_callbacks;
+    uint32_t num_tmp_debug_messengers;
+    VkDebugUtilsMessengerCreateInfoEXT *tmp_messenger_create_infos;
+    VkDebugUtilsMessengerEXT *tmp_debug_messengers;
 };
 
 struct layer_data {
@@ -65,6 +72,7 @@ struct layer_data {
     VkLayerDispatchTable dispatch_table = {};
 
     std::unordered_map<uint64_t, std::unique_ptr<TEMPLATE_STATE>> desc_template_map;
+    std::unordered_set<std::string> device_extension_set;
 
     bool wsi_enabled;
     VkPhysicalDevice gpu;
@@ -124,6 +132,26 @@ HandleType WrapNew(HandleType newlyCreatedHandle) {
     auto unique_id = global_unique_id++;
     unique_id_mapping[unique_id] = reinterpret_cast<uint64_t const &>(newlyCreatedHandle);
     return (HandleType)unique_id;
+}
+
+// Specialized handling for VkDisplayKHR. Adds an entry to enable reverse-lookup.
+// must hold lock!
+VkDisplayKHR WrapDisplay(VkDisplayKHR newlyCreatedHandle, instance_layer_data *map_data) {
+    auto unique_id = global_unique_id++;
+    unique_id_mapping[unique_id] = reinterpret_cast<uint64_t const &>(newlyCreatedHandle);
+    map_data->display_id_reverse_mapping[newlyCreatedHandle] = unique_id;
+    return (VkDisplayKHR)unique_id;
+}
+
+// VkDisplayKHR objects don't have a single point of creation, so we need to see
+// if one already exists in the map before creating another.
+// must hold lock!
+VkDisplayKHR MaybeWrapDisplay(VkDisplayKHR handle, instance_layer_data *map_data) {
+    // See if this display is already known
+    auto it = map_data->display_id_reverse_mapping.find(handle);
+    if (it != map_data->display_id_reverse_mapping.end()) return (VkDisplayKHR)it->second;
+    // Unknown, so wrap
+    return WrapDisplay(handle, map_data);
 }
 
 }  // namespace unique_objects

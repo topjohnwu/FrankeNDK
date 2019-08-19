@@ -114,21 +114,6 @@ else
 endif
 
 # -----------------------------------------------------------------------------
-# Function : get-toolchain-root
-# Arguments: 1: Toolchain name
-# Returns  : Path to the given prebuilt toolchain.
-# -----------------------------------------------------------------------------
-get-toolchain-root = $(call host-toolchain-path,$(NDK_TOOLCHAINS_ROOT),$1)
-
-# -----------------------------------------------------------------------------
-# Function : get-binutils-root
-# Arguments: 1: NDK root
-#            2: Toolchain name (no version number)
-# Returns  : Path to the given prebuilt binutils.
-# -----------------------------------------------------------------------------
-get-binutils-root = $1/binutils/$2
-
-# -----------------------------------------------------------------------------
 # Function : get-gcclibs-path
 # Arguments: 1: NDK root
 #            2: Toolchain name (no version number)
@@ -457,32 +442,6 @@ $(foreach _platform,$(NDK_ALL_PLATFORMS),\
   $(eval include $(BUILD_SYSTEM)/add-platform.mk)\
 )
 
-# we're going to find the maximum platform number of the form android-<number>
-# ignore others, which could correspond to special and experimental cases
-NDK_ALL_PLATFORM_LEVELS := $(filter android-%,$(NDK_ALL_PLATFORMS))
-NDK_ALL_PLATFORM_LEVELS := $(patsubst android-%,%,$(NDK_ALL_PLATFORM_LEVELS))
-$(call ndk_log,Found stable platform levels: $(NDK_ALL_PLATFORM_LEVELS))
-
-NDK_MIN_PLATFORM_LEVEL := 14
-NDK_MIN_PLATFORM := android-$(NDK_MIN_PLATFORM_LEVEL)
-
-NDK_MAX_PLATFORM_LEVEL := 3
-$(foreach level,$(NDK_ALL_PLATFORM_LEVELS),\
-  $(eval NDK_MAX_PLATFORM_LEVEL := $$(call max,$$(NDK_MAX_PLATFORM_LEVEL),$$(level)))\
-)
-NDK_MAX_PLATFORM := android-$(NDK_MAX_PLATFORM_LEVEL)
-
-$(call ndk_log,Found max platform level: $(NDK_MAX_PLATFORM_LEVEL))
-
-# Allow the user to point at an alternate location for the toolchains. This is
-# particularly helpful if we want to use prebuilt toolchains for building an NDK
-# module. Specifically, we use this to build libc++ using ndk-build instead of
-# the old build-cxx-stl.sh and maintaining two sets of build rules.
-NDK_TOOLCHAINS_ROOT := $(strip $(NDK_TOOLCHAINS_ROOT))
-ifndef NDK_TOOLCHAINS_ROOT
-    NDK_TOOLCHAINS_ROOT := $(strip $(NDK_ROOT)/toolchains)
-endif
-
 # ====================================================================
 #
 # Read all toolchain-specific configuration files.
@@ -502,13 +461,9 @@ endif
 # the build script to include in each toolchain config.mk
 ADD_TOOLCHAIN := $(BUILD_SYSTEM)/add-toolchain.mk
 
-# ABI information is kept in meta/abis.json so it can be shared among multiple
-# build systems. Use Python to convert the JSON into make, replace the newlines
-# as necessary (make helpfully turns newlines into spaces for us...
-# https://www.gnu.org/software/make/manual/html_node/Shell-Function.html) and
-# eval the result.
-$(eval $(subst %NEWLINE%,$(newline),$(shell $(HOST_PYTHON) \
-    $(BUILD_PY)/import_abi_metadata.py $(NDK_ROOT)/meta/abis.json)))
+# checkbuild.py generates these two files from the files in $NDK/meta.
+include $(BUILD_SYSTEM)/abis.mk
+include $(BUILD_SYSTEM)/platforms.mk
 
 NDK_KNOWN_DEVICE_ABIS := $(NDK_KNOWN_DEVICE_ABI64S) $(NDK_KNOWN_DEVICE_ABI32S)
 
@@ -516,8 +471,10 @@ NDK_APP_ABI_ALL_EXPANDED := $(NDK_KNOWN_DEVICE_ABIS)
 NDK_APP_ABI_ALL32_EXPANDED := $(NDK_KNOWN_DEVICE_ABI32S)
 NDK_APP_ABI_ALL64_EXPANDED := $(NDK_KNOWN_DEVICE_ABI64S)
 
-# The first API level ndk-build enforces -fPIE for executable
-NDK_FIRST_PIE_PLATFORM_LEVEL := 16
+NDK_MIN_PLATFORM := android-$(NDK_MIN_PLATFORM_LEVEL)
+NDK_MAX_PLATFORM := android-$(NDK_MAX_PLATFORM_LEVEL)
+
+$(call ndk_log,Found max platform level: $(NDK_MAX_PLATFORM_LEVEL))
 
 # the list of all toolchains in this NDK
 NDK_ALL_TOOLCHAINS :=

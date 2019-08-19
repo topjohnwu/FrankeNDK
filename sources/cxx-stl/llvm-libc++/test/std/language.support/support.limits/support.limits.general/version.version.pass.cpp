@@ -29,6 +29,7 @@
     __cpp_lib_complex_udls                      201309L
     __cpp_lib_concepts                          201806L
     __cpp_lib_constexpr_swap_algorithms         201806L
+    __cpp_lib_destroying_delete                 201806L
     __cpp_lib_enable_shared_from_this           201603L
     __cpp_lib_exchange_function                 201304L
     __cpp_lib_execution                         201603L
@@ -75,6 +76,7 @@
     __cpp_lib_string_udls                       201304L
     __cpp_lib_string_view                       201606L
     __cpp_lib_to_chars                          201611L
+    __cpp_lib_three_way_comparison              201711L
     __cpp_lib_transformation_trait_aliases      201304L
     __cpp_lib_transparent_operators             201510L
     __cpp_lib_tuple_element_t                   201402L
@@ -88,13 +90,14 @@
 */
 
 #include <version>
+#include <cassert>
 #include "test_macros.h"
 
 int main()
 {
 //  ensure that the macros that are supposed to be defined in <version> are defined.
 
-#if _TEST_STD_VER > 14
+#if TEST_STD_VER > 14
 # if !defined(__cpp_lib_atomic_is_always_lock_free)
 #  error "__cpp_lib_atomic_is_always_lock_free is not defined"
 # elif __cpp_lib_atomic_is_always_lock_free < 201603L
@@ -102,7 +105,7 @@ int main()
 # endif
 #endif
 
-#if _TEST_STD_VER > 14
+#if TEST_STD_VER > 14
 # if !defined(__cpp_lib_filesystem)
 #  error "__cpp_lib_filesystem is not defined"
 # elif __cpp_lib_filesystem < 201703L
@@ -110,7 +113,7 @@ int main()
 # endif
 #endif
 
-#if _TEST_STD_VER > 14
+#if TEST_STD_VER > 14
 # if !defined(__cpp_lib_invoke)
 #  error "__cpp_lib_invoke is not defined"
 # elif __cpp_lib_invoke < 201411L
@@ -118,11 +121,21 @@ int main()
 # endif
 #endif
 
-#if _TEST_STD_VER > 14
+#if TEST_STD_VER > 14
 # if !defined(__cpp_lib_void_t)
 #  error "__cpp_lib_void_t is not defined"
 # elif __cpp_lib_void_t < 201411L
 #  error "__cpp_lib_void_t has an invalid value"
+# endif
+#endif
+
+#if TEST_STD_VER > 17 && defined(__cpp_char8_t)
+# if !defined(__cpp_lib_char8_t)  
+  LIBCPP_STATIC_ASSERT(false, "__cpp_lib_char8_t is not defined");
+# else
+#  if __cpp_lib_char8_t < 201811L
+#   error "__cpp_lib_char8_t has an invalid value"
+#  endif
 # endif
 #endif
 

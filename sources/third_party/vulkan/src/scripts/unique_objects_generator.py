@@ -24,6 +24,7 @@ import os,re,sys
 import xml.etree.ElementTree as etree
 from generator import *
 from collections import namedtuple
+from common_codegen import *
 
 # UniqueObjectsGeneratorOptions - subclass of GeneratorOptions.
 #
@@ -69,34 +70,34 @@ class UniqueObjectsGeneratorOptions(GeneratorOptions):
                  defaultExtensions = None,
                  addExtensions = None,
                  removeExtensions = None,
+                 emitExtensions = None,
                  sortProcedure = regSortFeatures,
                  prefixText = "",
                  genFuncPointers = True,
                  protectFile = True,
                  protectFeature = True,
-                 protectProto = None,
-                 protectProtoStr = None,
                  apicall = '',
                  apientry = '',
                  apientryp = '',
                  indentFuncProto = True,
                  indentFuncPointer = False,
-                 alignFuncParam = 0):
+                 alignFuncParam = 0,
+                 expandEnumerants = True):
         GeneratorOptions.__init__(self, filename, directory, apiname, profile,
                                   versions, emitversions, defaultExtensions,
-                                  addExtensions, removeExtensions, sortProcedure)
+                                  addExtensions, removeExtensions, emitExtensions, sortProcedure)
         self.prefixText      = prefixText
         self.genFuncPointers = genFuncPointers
         self.protectFile     = protectFile
         self.protectFeature  = protectFeature
-        self.protectProto    = protectProto
-        self.protectProtoStr = protectProtoStr
         self.apicall         = apicall
         self.apientry        = apientry
         self.apientryp       = apientryp
         self.indentFuncProto = indentFuncProto
         self.indentFuncPointer = indentFuncPointer
-        self.alignFuncParam  = alignFuncParam
+        self.alignFuncParam   = alignFuncParam
+        self.expandEnumerants = expandEnumerants
+
 
 # UniqueObjectsOutputGenerator - subclass of OutputGenerator.
 # Generates unique objects layer non-dispatchable handle-wrapping code.
@@ -142,26 +143,30 @@ class UniqueObjectsOutputGenerator(OutputGenerator):
             'vkEnumerateInstanceLayerProperties',
             'vkEnumerateDeviceLayerProperties',
             'vkEnumerateInstanceExtensionProperties',
+            'vkCreateDescriptorUpdateTemplate',
             'vkCreateDescriptorUpdateTemplateKHR',
+            'vkDestroyDescriptorUpdateTemplate',
             'vkDestroyDescriptorUpdateTemplateKHR',
+            'vkUpdateDescriptorSetWithTemplate',
             'vkUpdateDescriptorSetWithTemplateKHR',
             'vkCmdPushDescriptorSetWithTemplateKHR',
             'vkDebugMarkerSetObjectTagEXT',
             'vkDebugMarkerSetObjectNameEXT',
-            'vkGetPhysicalDeviceDisplayProperties2KHR',
-            'vkGetPhysicalDeviceDisplayPlaneProperties2KHR',
-            'vkGetDisplayModeProperties2KHR',
             'vkCreateRenderPass',
+            'vkCreateRenderPass2KHR',
             'vkDestroyRenderPass',
-            ]
-        # Commands shadowed by interface functions and are not implemented
-        self.interface_functions = [
+            'vkSetDebugUtilsObjectNameEXT',
+            'vkSetDebugUtilsObjectTagEXT',
             'vkGetPhysicalDeviceDisplayPropertiesKHR',
+            'vkGetPhysicalDeviceDisplayProperties2KHR',
             'vkGetPhysicalDeviceDisplayPlanePropertiesKHR',
+            'vkGetPhysicalDeviceDisplayPlaneProperties2KHR',
             'vkGetDisplayPlaneSupportedDisplaysKHR',
             'vkGetDisplayModePropertiesKHR',
-            'vkGetDisplayPlaneCapabilitiesKHR',
-            # DebugReport APIs are hooked, but handled separately in the source file
+            'vkGetDisplayModeProperties2KHR',
+            'vkCreateDebugUtilsMessengerEXT',
+            'vkDestroyDebugUtilsMessengerEXT',
+            'vkSubmitDebugUtilsMessageEXT',
             'vkCreateDebugReportCallbackEXT',
             'vkDestroyDebugReportCallbackEXT',
             'vkDebugReportMessageEXT',
@@ -237,9 +242,6 @@ class UniqueObjectsOutputGenerator(OutputGenerator):
                 write('#ifdef', self.featureExtraProtect, file=self.outFile)
             # Write the unique_objects code to the file
             if (self.sections['command']):
-                if (self.genOpts.protectProto):
-                    write(self.genOpts.protectProto,
-                          self.genOpts.protectProtoStr, file=self.outFile)
                 write('\n'.join(self.sections['command']), end=u'', file=self.outFile)
             if (self.featureExtraProtect != None):
                 write('\n#endif //', self.featureExtraProtect, file=self.outFile)
@@ -260,8 +262,8 @@ class UniqueObjectsOutputGenerator(OutputGenerator):
         # Start processing in superclass
         OutputGenerator.beginFeature(self, interface, emit)
         self.headerVersion = None
-
-        if self.featureName != 'VK_VERSION_1_0':
+        self.featureExtraProtect = GetFeatureProtect(interface)
+        if self.featureName != 'VK_VERSION_1_0' and self.featureName != 'VK_VERSION_1_1':
             white_list_entry = []
             if (self.featureExtraProtect != None):
                 white_list_entry += [ '#ifdef %s' % self.featureExtraProtect ]
@@ -278,14 +280,14 @@ class UniqueObjectsOutputGenerator(OutputGenerator):
         # Finish processing in superclass
         OutputGenerator.endFeature(self)
     #
-    def genType(self, typeinfo, name):
-        OutputGenerator.genType(self, typeinfo, name)
+    def genType(self, typeinfo, name, alias):
+        OutputGenerator.genType(self, typeinfo, name, alias)
         typeElem = typeinfo.elem
         # If the type is a struct type, traverse the imbedded <member> tags generating a structure.
         # Otherwise, emit the tag text.
         category = typeElem.get('category')
         if (category == 'struct' or category == 'union'):
-            self.genStruct(typeinfo, name)
+            self.genStruct(typeinfo, name, alias)
     #
     # Append a definition to the specified section
     def appendSection(self, section, text):
@@ -356,8 +358,8 @@ class UniqueObjectsOutputGenerator(OutputGenerator):
     # <member> tags instead of freeform C type declarations. The <member> tags are just like
     # <param> tags - they are a declaration of a struct or union member. Only simple member
     # declarations are supported (no nested structs etc.)
-    def genStruct(self, typeinfo, typeName):
-        OutputGenerator.genStruct(self, typeinfo, typeName)
+    def genStruct(self, typeinfo, typeName, alias):
+        OutputGenerator.genStruct(self, typeinfo, typeName, alias)
         members = typeinfo.elem.findall('.//member')
         # Iterate over members once to get length parameters for arrays
         lens = set()
@@ -513,12 +515,24 @@ class UniqueObjectsOutputGenerator(OutputGenerator):
         pnext_proc += '}\n\n'
         pnext_proc += '// Free a pNext extension chain\n'
         pnext_proc += 'void FreeUnwrappedExtensionStructs(void *head) {\n'
-        pnext_proc += '    void * curr_ptr = head;\n'
+        pnext_proc += '    GenericHeader *curr_ptr = reinterpret_cast<GenericHeader *>(head);\n'
         pnext_proc += '    while (curr_ptr) {\n'
-        pnext_proc += '        GenericHeader *header = reinterpret_cast<GenericHeader *>(curr_ptr);\n'
-        pnext_proc += '        void *temp = curr_ptr;\n'
-        pnext_proc += '        curr_ptr = header->pNext;\n'
-        pnext_proc += '        free(temp);\n'
+        pnext_proc += '        GenericHeader *header = curr_ptr;\n'
+        pnext_proc += '        curr_ptr = reinterpret_cast<GenericHeader *>(header->pNext);\n\n'
+        pnext_proc += '        switch (header->sType) {\n';
+        for item in self.extension_structs:
+            struct_info = self.struct_member_dict[item]
+            if struct_info[0].feature_protect is not None:
+                pnext_proc += '#ifdef %s \n' % struct_info[0].feature_protect
+            pnext_proc += '            case %s:\n' % self.structTypes[item].value
+            pnext_proc += '                delete reinterpret_cast<safe_%s *>(header);\n' % item
+            pnext_proc += '                break;\n'
+            if struct_info[0].feature_protect is not None:
+                pnext_proc += '#endif // %s \n' % struct_info[0].feature_protect
+            pnext_proc += '\n'
+        pnext_proc += '            default:\n'
+        pnext_proc += '                assert(0);\n'
+        pnext_proc += '        }\n'
         pnext_proc += '    }\n'
         pnext_proc += '}\n'
         return pnext_proc
@@ -664,7 +678,7 @@ class UniqueObjectsOutputGenerator(OutputGenerator):
                     if first_level_param == False:
                         count_name = '%s%s' % (prefix, member.len)
 
-                if (first_level_param == False) or (create_func == False):
+                if (first_level_param == False) or (create_func == False) or (not '*' in member.cdecl):
                     (tmp_decl, tmp_pre, tmp_post) = self.outputNDOs(member.type, member.name, count_name, prefix, index, indent, destroy_func, destroy_array, first_level_param)
                     decls += tmp_decl
                     pre_code += tmp_pre
@@ -674,6 +688,8 @@ class UniqueObjectsOutputGenerator(OutputGenerator):
                 # Structs at first level will have an NDO, OR, we need a safe_struct for the pnext chain
                 if self.struct_contains_ndo(member.type) == True or process_pnext:
                     struct_info = self.struct_member_dict[member.type]
+                    # TODO (jbolz): Can this use paramIsPointer?
+                    ispointer = '*' in member.cdecl;
                     # Struct Array
                     if member.len is not None:
                         # Update struct prefix
@@ -706,7 +722,7 @@ class UniqueObjectsOutputGenerator(OutputGenerator):
                         if first_level_param == True:
                             post_code += self.cleanUpLocalDeclarations(indent, prefix, member.name, member.len, index, process_pnext)
                     # Single Struct
-                    else:
+                    elif ispointer:
                         # Update struct prefix
                         if first_level_param == True:
                             new_prefix = 'local_%s->' % member.name
@@ -729,6 +745,19 @@ class UniqueObjectsOutputGenerator(OutputGenerator):
                         pre_code += '%s    }\n' % indent
                         if first_level_param == True:
                             post_code += self.cleanUpLocalDeclarations(indent, prefix, member.name, member.len, index, process_pnext)
+                    else:
+                        # Update struct prefix
+                        if first_level_param == True:
+                            sys.exit(1)
+                        else:
+                            new_prefix = '%s%s.' % (prefix, member.name)
+                        # Process sub-structs in this struct
+                        (tmp_decl, tmp_pre, tmp_post) = self.uniquify_members(struct_info, indent, new_prefix, array_index, create_func, destroy_func, destroy_array, False)
+                        decls += tmp_decl
+                        pre_code += tmp_pre
+                        post_code += tmp_post
+                        if process_pnext:
+                            pre_code += '%s    local_%s%s.pNext = CreateUnwrappedExtensionStructs(local_%s%s.pNext);\n' % (indent, prefix, member.name, prefix, member.name)
         return decls, pre_code, post_code
     #
     # For a particular API, generate the non-dispatchable-object wrapping/unwrapping code
@@ -769,10 +798,10 @@ class UniqueObjectsOutputGenerator(OutputGenerator):
         return paramdecl, param_pre_code, param_post_code
     #
     # Capture command parameter info needed to wrap NDOs as well as handling some boilerplate code
-    def genCmd(self, cmdinfo, cmdname):
+    def genCmd(self, cmdinfo, cmdname, alias):
 
         # Add struct-member type information to command parameter information
-        OutputGenerator.genCmd(self, cmdinfo, cmdname)
+        OutputGenerator.genCmd(self, cmdinfo, cmdname, alias)
         members = cmdinfo.elem.findall('.//param')
         # Iterate over members once to get length parameters for arrays
         lens = set()
@@ -832,8 +861,6 @@ class UniqueObjectsOutputGenerator(OutputGenerator):
         for api_call in self.cmdMembers:
             cmdname = api_call.name
             cmdinfo = cmd_info_dict[api_call.name]
-            if cmdname in self.interface_functions:
-                continue
             if cmdname in self.no_autogen_list:
                 decls = self.makeCDecls(cmdinfo.elem)
                 self.appendSection('command', '')

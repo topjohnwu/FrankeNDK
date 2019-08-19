@@ -20,11 +20,10 @@
 
 from __future__ import print_function
 import argparse
-import sys
-from simpleperf_report_lib import *
+from simpleperf_report_lib import ReportLib
 
 
-def report_sample(record_file, symfs_dir, kallsyms_file=None):
+def report_sample(record_file, symfs_dir, kallsyms_file, show_tracing_data):
     """ read record_file, and print each sample"""
     lib = ReportLib()
 
@@ -54,15 +53,26 @@ def report_sample(record_file, symfs_dir, kallsyms_file=None):
         for i in range(callchain.nr):
             entry = callchain.entries[i]
             print('%16x\t%s (%s)' % (entry.ip, entry.symbol.symbol_name, entry.symbol.dso_name))
+        if show_tracing_data:
+            data = lib.GetTracingDataOfCurrentSample()
+            if data:
+                print('\ttracing data:')
+                for key, value in data.items():
+                    print('\t\t%s : %s' % (key, value))
         print('')
 
 
-if __name__ == '__main__':
+def main():
     parser = argparse.ArgumentParser(description='Report samples in perf.data.')
     parser.add_argument('--symfs',
                         help='Set the path to find binaries with symbols and debug info.')
     parser.add_argument('--kallsyms', help='Set the path to find kernel symbols.')
     parser.add_argument('record_file', nargs='?', default='perf.data',
                         help='Default is perf.data.')
+    parser.add_argument('--show_tracing_data', action='store_true', help='print tracing data.')
     args = parser.parse_args()
-    report_sample(args.record_file, args.symfs, args.kallsyms)
+    report_sample(args.record_file, args.symfs, args.kallsyms, args.show_tracing_data)
+
+
+if __name__ == '__main__':
+    main()

@@ -35,8 +35,13 @@ $(call module-add,$(LOCAL_MODULE))
 
 # Eval sucks. It's not possible to preserve even properly escaped # characters
 # as far as I can tell, and we need that for -Werror=#warnings. Manually stash
-# all the cflags variations so we can preserve these.
+# all the flags variations so we can preserve these.
+__ndk_modules.$(LOCAL_MODULE).ASFLAGS := $(LOCAL_ASFLAGS)
+__ndk_modules.$(LOCAL_MODULE).ASMFLAGS := $(LOCAL_ASMFLAGS)
 __ndk_modules.$(LOCAL_MODULE).CFLAGS := $(LOCAL_CFLAGS)
+__ndk_modules.$(LOCAL_MODULE).CLANG_TIDY_FLAGS := $(LOCAL_CLANG_TIDY_FLAGS)
 __ndk_modules.$(LOCAL_MODULE).CONLYFLAGS := $(LOCAL_CONLYFLAGS)
 __ndk_modules.$(LOCAL_MODULE).CPPFLAGS := $(LOCAL_CPPFLAGS)
 __ndk_modules.$(LOCAL_MODULE).CXXFLAGS := $(LOCAL_CXXFLAGS)
+__ndk_modules.$(LOCAL_MODULE).LDFLAGS := $(LOCAL_LDFLAGS)
+__ndk_modules.$(LOCAL_MODULE).RENDERSCRIPT_FLAGS := $(LOCAL_RENDERSCRIPT_FLAGS)

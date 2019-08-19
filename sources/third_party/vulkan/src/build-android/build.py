@@ -142,7 +142,7 @@ def main():
   ndk_build = os.path.join(ndk_dir, 'ndk-build')
   platforms_root = os.path.join(ndk_dir, 'platforms')
   toolchains_root = os.path.join(ndk_dir, 'toolchains')
-  build_dir = THIS_DIR
+  build_dir = installdir
 
   print('installdir: %s' % installdir)
   print('ndk_dir: %s' % ndk_dir)
@@ -159,6 +159,10 @@ def main():
 
   print('Constructing shaderc build tree...')
   shaderc_root_dir = os.path.join(THIS_DIR, '../../shaderc')
+
+  print('Pulling in vulkan headers and layers...')
+  vulkan_root_dir = os.path.join(THIS_DIR, '../../vulkan-validation-layers')
+  vulkan_headers_root_dir = os.path.join(THIS_DIR, '../../vulkan-headers')
 
   copies = [
       {
@@ -216,11 +220,29 @@ def main():
               'glslang/Public',
           ],
       },
+      {
+          'source_dir': vulkan_root_dir,
+          'dest_dir': 'vulkan/src',
+          'files': [
+          ],
+          'dirs': [
+              'layers', 'scripts', 'build-android'
+          ],
+      },
+
+      {
+          'source_dir': vulkan_headers_root_dir,
+          'dest_dir': 'vulkan/src',
+          'files': [
+          ],
+          'dirs': [
+              'include', 'registry'
+          ],
+      },
   ]
 
   default_ignore_patterns = shutil.ignore_patterns(
       "*CMakeLists.txt",
-      "*.py",
       "*test.h",
       "*test.cc")
 
@@ -246,14 +268,15 @@ def main():
   print('Constructing Vulkan validation layer source...')
 
   build_cmd = [
-    'bash', THIS_DIR + '/android-generate.sh'
+    'bash', build_dir + '/vulkan/src/build-android/android-generate.sh',
+            build_dir + '/vulkan/src/registry'
   ]
   print('Generating generated layers...')
   subprocess.check_call(build_cmd)
   print('Generation finished')
 
   build_cmd = [
-    'bash', ndk_build, '-C', build_dir,
+    'bash', ndk_build, '-C', build_dir + '/vulkan/src/build-android',
     jobs_arg(),
     'APP_ABI=' + ' '.join(abis),
     # Use the prebuilt platforms and toolchains.

@@ -26,11 +26,11 @@ MODLIBS=        $(LOCALMODLIBS) $(BASEMODLIBS)
 
 # === Variables set by configure
 VERSION=	2.7
-srcdir=		/usr/local/google/buildbot/src/android/ndk-release-r17/toolchain/python/Python-2.7.5
-VPATH=		/usr/local/google/buildbot/src/android/ndk-release-r17/toolchain/python/Python-2.7.5
-MSYSVPATH=	/usr/local/google/buildbot/src/android/ndk-release-r17/toolchain/python/Python-2.7.5
-abs_srcdir=	/usr/local/google/buildbot/src/android/ndk-release-r17/toolchain/python/Python-2.7.5
-abs_builddir=	/usr/local/google/buildbot/src/android/ndk-release-r17/out/python/build-python-linux-x86_64-2.7.5
+srcdir=		/usr/local/google/buildbot/src/android/ndk-release-r20/toolchain/python/Python-2.7.5
+VPATH=		/usr/local/google/buildbot/src/android/ndk-release-r20/toolchain/python/Python-2.7.5
+MSYSVPATH=	/usr/local/google/buildbot/src/android/ndk-release-r20/toolchain/python/Python-2.7.5
+abs_srcdir=	/usr/local/google/buildbot/src/android/ndk-release-r20/toolchain/python/Python-2.7.5
+abs_builddir=	/usr/local/google/buildbot/src/android/ndk-release-r20/out/linux/python/build-python-linux-x86_64-2.7.5
 build=		x86_64-pc-linux-gnu
 host=		x86_64-pc-linux-gnu
 
@@ -92,10 +92,10 @@ DELIM=		:
 MACHDEP=	linux2
 
 # Multiarch directory (may be empty)
-MULTIARCH=	
+MULTIARCH=	x86_64-linux-gnu
 
 # Install prefix for architecture-independent files
-prefix=		/usr/local/google/buildbot/src/android/ndk-release-r17/out/python/linux-x86_64/install/host-tools
+prefix=		/usr/local/google/buildbot/src/android/ndk-release-r20/out/linux/python/linux-x86_64/install/host-tools
 
 # Install prefix for architecture-dependent files
 exec_prefix=	${prefix}
@@ -154,7 +154,7 @@ EXEMODE=	755
 FILEMODE=	644
 
 # configure script arguments
-CONFIG_ARGS=	 '--prefix=/usr/local/google/buildbot/src/android/ndk-release-r17/out/python/linux-x86_64/install/host-tools' '--build=x86_64-linux-gnu' '--host=x86_64-linux-gnu' '--with-build-sysroot' '--disable-ipv6' 'build_alias=x86_64-linux-gnu' 'host_alias=x86_64-linux-gnu' 'CC=x86_64-linux-gnu-gcc' 'CFLAGS=-O2 -Os -fomit-frame-pointer -s' 'LDFLAGS='
+CONFIG_ARGS=	 '--prefix=/usr/local/google/buildbot/src/android/ndk-release-r20/out/linux/python/linux-x86_64/install/host-tools' '--build=x86_64-linux-gnu' '--host=x86_64-linux-gnu' '--with-build-sysroot' '--disable-ipv6' 'build_alias=x86_64-linux-gnu' 'host_alias=x86_64-linux-gnu' 'CC=x86_64-linux-gnu-gcc' 'CFLAGS=-O2 -Os -fomit-frame-pointer -s' 'LDFLAGS='
 
 
 # Subdirectories with code

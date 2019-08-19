@@ -47,7 +47,6 @@ from ndk.abis import (
     toolchain_to_arch,
 )
 
-from ndk.builds import make_repo_prop
 from ndk.hosts import get_default_host, host_to_tag
 from ndk.paths import (
     android_path,
@@ -86,8 +85,7 @@ def make_package(name, directory, out_dir):
     """Pacakges an NDK module for release.
 
     Makes a zipfile of the single NDK module that can be released in the SDK
-    manager. This will handle the details of creating the repo.prop file for
-    the package.
+    manager.
 
     Args:
         name: Name of the final package, excluding extension.
@@ -105,39 +103,11 @@ def make_package(name, directory, out_dir):
     os.chdir(os.path.dirname(directory))
     basename = os.path.basename(directory)
     try:
-        # repo.prop files are excluded because in the event that we have a
-        # repo.prop in the root of the directory we're packaging, the repo.prop
-        # file we add later in this function will create a second entry (the
-        # zip format allows multiple files with the same path).
-        #
-        # The one we create here will point back to the tree that was used to
-        # build the package, and the original repo.prop can be reached from
-        # there, so no information is lost.
         subprocess.check_call(
-            ['zip', '-x', '*.pyc', '-x', '*.pyo', '-x', '*.swp',
-             '-x', '*.git*', '-x', os.path.join(basename, 'repo.prop'), '-0qr',
-             path, basename])
+            ['zip', '-x', '*.pyc', '-x', '*.pyo', '-x', '*.swp', '-x',
+             '*.git*', '-0qr', path, basename])
     finally:
         os.chdir(cwd)
-
-    with zipfile.ZipFile(path, 'a', zipfile.ZIP_DEFLATED) as zip_file:
-        tmpdir = tempfile.mkdtemp()
-        try:
-            make_repo_prop(tmpdir)
-            arcname = os.path.join(basename, 'repo.prop')
-            zip_file.write(os.path.join(tmpdir, 'repo.prop'), arcname)
-        finally:
-            shutil.rmtree(tmpdir)
-
-
-def merge_license_files(output_path, files):
-    licenses = []
-    for license_path in files:
-        with open(license_path) as license_file:
-            licenses.append(license_file.read())
-
-    with open(output_path, 'w') as output_file:
-        output_file.write('\n'.join(licenses))
 
 
 class ArgParser(argparse.ArgumentParser):

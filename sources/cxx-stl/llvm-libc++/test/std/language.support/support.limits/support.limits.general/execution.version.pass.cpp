@@ -7,7 +7,7 @@
 // Source Licenses. See LICENSE.TXT for details.
 //
 //===----------------------------------------------------------------------===//
-// 
+//
 // <execution> feature macros
 
 /*  Constant                                    Value
@@ -17,6 +17,7 @@
 
 // XFAIL
 // #include <execution>
+#include <cassert>
 #include "test_macros.h"
 
 int main()

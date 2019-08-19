@@ -28,32 +28,25 @@ from __future__ import print_function
 import argparse
 import os
 import os.path
-import re
-import shutil
-import sys
-import time
 
-from annotate import Addr2Line
-from simpleperf_report_lib import *
-from utils import *
-
+from simpleperf_report_lib import ReportLib
+from utils import Addr2Nearestline, bytes_to_str, extant_dir, find_tool_path, flatten_arg_list
+from utils import log_info, log_exit, str_to_bytes
 try:
-    import google.protobuf
-except:
+    import profile_pb2
+except ImportError:
     log_exit('google.protobuf module is missing. Please install it first.')
-
-import profile_pb2
 
 def load_pprof_profile(filename):
     profile = profile_pb2.Profile()
     with open(filename, "rb") as f:
-        profile.ParseFromString(f.read())
+        profile.ParseFromString(bytes_to_str(f.read()))
     return profile
 
 
 def store_pprof_profile(filename, profile):
     with open(filename, 'wb') as f:
-        f.write(profile.SerializeToString())
+        f.write(str_to_bytes(profile.SerializeToString()))
 
 
 class PprofProfilePrinter(object):
@@ -165,15 +158,8 @@ class PprofProfilePrinter(object):
         print('%sfilename: %s' % (space, self.string(function.filename)))
         print('%sstart_line: %d' % (space, function.start_line))
 
-    def show_label(self, label, space=''):
-        print('%sLabel(%s =', space, self.string(label.key), end='')
-        if label.HasField('str'):
-            print('%s)' % self.get_string(label.str))
-        else:
-            print('%d)' % label.num)
-
-    def string(self, id):
-        return self.string_table[id]
+    def string(self, string_id):
+        return self.string_table[string_id]
 
 
 class Sample(object):
@@ -185,13 +171,12 @@ class Sample(object):
     def add_location_id(self, location_id):
         self.location_ids.append(location_id)
 
-    def add_value(self, id, value):
-        self.values[id] = self.values.get(id, 0) + value
+    def add_value(self, sample_type_id, value):
+        self.values[sample_type_id] = self.values.get(sample_type_id, 0) + value
 
     def add_values(self, values):
-        for id in values.keys():
-            value = values[id]
-            self.add_value(id, value)
+        for sample_type_id, value in values.items():
+            self.add_value(sample_type_id, value)
 
     @property
     def key(self):
@@ -254,6 +239,7 @@ class Function(object):
         return (self.name_id, self.dso_name_id)
 
 
+# pylint: disable=no-member
 class PprofProfileGenerator(object):
 
     def __init__(self, config):
@@ -280,8 +266,6 @@ class PprofProfileGenerator(object):
         else:
             self.tid_filter = None
         self.dso_filter = set(config['dso_filters']) if config.get('dso_filters') else None
-
-    def gen(self):
         self.profile = profile_pb2.Profile()
         self.profile.string_table.append('')
         self.string_table = {}
@@ -295,6 +279,7 @@ class PprofProfileGenerator(object):
         self.function_map = {}
         self.function_list = []
 
+    def gen(self):
         # 1. Process all samples in perf.data, aggregate samples.
         while True:
             report_sample = self.lib.GetNextSample()
@@ -356,33 +341,33 @@ class PprofProfileGenerator(object):
             return True
         return False
 
-    def get_string_id(self, str):
-        if len(str) == 0:
+    def get_string_id(self, str_value):
+        if not str_value:
             return 0
-        id = self.string_table.get(str)
-        if id is not None:
-            return id
-        id = len(self.string_table) + 1
-        self.string_table[str] = id
-        self.profile.string_table.append(str)
-        return id
+        str_id = self.string_table.get(str_value)
+        if str_id is not None:
+            return str_id
+        str_id = len(self.string_table) + 1
+        self.string_table[str_value] = str_id
+        self.profile.string_table.append(str_value)
+        return str_id
 
-    def get_string(self, string_id):
-        return self.profile.string_table[string_id]
+    def get_string(self, str_id):
+        return self.profile.string_table[str_id]
 
     def get_sample_type_id(self, name):
-        id = self.sample_types.get(name)
-        if id is not None:
-            return id
-        id = len(self.profile.sample_type)
+        sample_type_id = self.sample_types.get(name)
+        if sample_type_id is not None:
+            return sample_type_id
+        sample_type_id = len(self.profile.sample_type)
         sample_type = self.profile.sample_type.add()
         sample_type.type = self.get_string_id('event_' + name + '_samples')
         sample_type.unit = self.get_string_id('count')
         sample_type = self.profile.sample_type.add()
         sample_type.type = self.get_string_id('event_' + name + '_count')
         sample_type.unit = self.get_string_id('count')
-        self.sample_types[name] = id
-        return id
+        self.sample_types[name] = sample_type_id
+        return sample_type_id
 
     def get_location_id(self, ip, symbol):
         mapping_id = self.get_mapping_id(symbol.mapping[0], symbol.dso_name)
@@ -457,53 +442,62 @@ class PprofProfileGenerator(object):
         if not find_tool_path('addr2line', self.config['ndk_path']):
             log_info("Can't generate line information because can't find addr2line.")
             return
-        addr2line = Addr2Line(self.config['ndk_path'], self.config['binary_cache_dir'])
+        addr2line = Addr2Nearestline(self.config['ndk_path'], self.config['binary_cache_dir'], True)
 
         # 2. Put all needed addresses to it.
         for location in self.location_list:
             mapping = self.get_mapping(location.mapping_id)
             dso_name = self.get_string(mapping.filename_id)
-            addr2line.add_addr(dso_name, location.vaddr_in_dso)
+            if location.lines:
+                function = self.get_function(location.lines[0].function_id)
+                addr2line.add_addr(dso_name, function.vaddr_in_dso, location.vaddr_in_dso)
         for function in self.function_list:
             dso_name = self.get_string(function.dso_name_id)
-            addr2line.add_addr(dso_name, function.vaddr_in_dso)
+            addr2line.add_addr(dso_name, function.vaddr_in_dso, function.vaddr_in_dso)
 
         # 3. Generate source lines.
         addr2line.convert_addrs_to_lines()
 
         # 4. Annotate locations and functions.
         for location in self.location_list:
+            if not location.lines:
+                continue
             mapping = self.get_mapping(location.mapping_id)
             dso_name = self.get_string(mapping.filename_id)
-            sources = addr2line.get_sources(dso_name, location.vaddr_in_dso)
-            source_id = 0
-            for source in sources:
-                if source.file and source.function and source.line:
-                    function_id = self.get_function_id(source.function, dso_name, 0)
-                    if function_id == 0:
-                        continue
-                    if source_id == 0:
-                        # Clear default line info
-                        location.lines = []
-                    location.lines.append(self.add_line(source, dso_name, function_id))
-                    source_id += 1
+            dso = addr2line.get_dso(dso_name)
+            if not dso:
+                continue
+            sources = addr2line.get_addr_source(dso, location.vaddr_in_dso)
+            if not sources:
+                continue
+            for (source_id, source) in enumerate(sources):
+                source_file, source_line, function_name = source
+                function_id = self.get_function_id(function_name, dso_name, 0)
+                if function_id == 0:
+                    continue
+                if source_id == 0:
+                    # Clear default line info
+                    location.lines = []
+                location.lines.append(self.add_line(source_file, source_line, function_id))
 
         for function in self.function_list:
             dso_name = self.get_string(function.dso_name_id)
             if function.vaddr_in_dso:
-                sources = addr2line.get_sources(dso_name, function.vaddr_in_dso)
-                source = sources[0] if sources else None
-                if source and source.file:
-                    function.source_filename_id = self.get_string_id(source.file)
-                    if source.line:
-                        function.start_line = source.line
+                dso = addr2line.get_dso(dso_name)
+                if not dso:
+                    continue
+                sources = addr2line.get_addr_source(dso, function.vaddr_in_dso)
+                if sources:
+                    source_file, source_line, _ = sources[0]
+                    function.source_filename_id = self.get_string_id(source_file)
+                    function.start_line = source_line
 
-    def add_line(self, source, dso_name, function_id):
+    def add_line(self, source_file, source_line, function_id):
         line = Line()
         function = self.get_function(function_id)
-        function.source_filename_id = self.get_string_id(source.file)
+        function.source_filename_id = self.get_string_id(source_file)
         line.function_id = function_id
-        line.line = source.line
+        line.line = source_line
         return line
 
     def gen_profile_sample(self, sample):
@@ -511,8 +505,8 @@ class PprofProfileGenerator(object):
         profile_sample.location_id.extend(sample.location_ids)
         sample_type_count = len(self.sample_types) * 2
         values = [0] * sample_type_count
-        for id in sample.values.keys():
-            values[id] = sample.values[id]
+        for sample_type_id in sample.values:
+            values[sample_type_id] = sample.values[sample_type_id]
         profile_sample.value.extend(values)
 
     def gen_profile_mapping(self, mapping):
@@ -554,18 +548,18 @@ class PprofProfileGenerator(object):
 def main():
     parser = argparse.ArgumentParser(description='Generate pprof profile data in pprof.profile.')
     parser.add_argument('--show', nargs='?', action='append', help='print existing pprof.profile.')
-    parser.add_argument('-i', '--perf_data_path', default='perf.data', help=
-"""The path of profiling data.""")
-    parser.add_argument('-o', '--output_file', default='pprof.profile', help=
-"""The path of generated pprof profile data.""")
-    parser.add_argument('--comm', nargs='+', action='append', help=
-"""Use samples only in threads with selected names.""")
-    parser.add_argument('--pid', nargs='+', action='append', help=
-"""Use samples only in processes with selected process ids.""")
-    parser.add_argument('--tid', nargs='+', action='append', help=
-"""Use samples only in threads with selected thread ids.""")
-    parser.add_argument('--dso', nargs='+', action='append', help=
-"""Use samples only in selected binaries.""")
+    parser.add_argument('-i', '--perf_data_path', default='perf.data', help="""
+        The path of profiling data.""")
+    parser.add_argument('-o', '--output_file', default='pprof.profile', help="""
+        The path of generated pprof profile data.""")
+    parser.add_argument('--comm', nargs='+', action='append', help="""
+        Use samples only in threads with selected names.""")
+    parser.add_argument('--pid', nargs='+', action='append', help="""
+        Use samples only in processes with selected process ids.""")
+    parser.add_argument('--tid', nargs='+', action='append', help="""
+        Use samples only in threads with selected thread ids.""")
+    parser.add_argument('--dso', nargs='+', action='append', help="""
+        Use samples only in selected binaries.""")
     parser.add_argument('--ndk_path', type=extant_dir, help='Set the path of a ndk release.')
 
     args = parser.parse_args()

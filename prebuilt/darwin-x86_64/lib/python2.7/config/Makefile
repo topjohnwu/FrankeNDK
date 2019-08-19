@@ -26,11 +26,11 @@ MODLIBS=        $(LOCALMODLIBS) $(BASEMODLIBS)
 
 # === Variables set by configure
 VERSION=	2.7
-srcdir=		/Volumes/Android/buildbot/src/android/ndk-release-r17/toolchain/python/Python-2.7.5
-VPATH=		/Volumes/Android/buildbot/src/android/ndk-release-r17/toolchain/python/Python-2.7.5
-MSYSVPATH=	/Volumes/Android/buildbot/src/android/ndk-release-r17/toolchain/python/Python-2.7.5
-abs_srcdir=	/Volumes/Android/buildbot/src/android/ndk-release-r17/toolchain/python/Python-2.7.5
-abs_builddir=	/Volumes/Android/buildbot/src/android/ndk-release-r17/out/python/build-python-darwin-x86_64-2.7.5
+srcdir=		/Volumes/Android/buildbot/src/android/ndk-release-r20/toolchain/python/Python-2.7.5
+VPATH=		/Volumes/Android/buildbot/src/android/ndk-release-r20/toolchain/python/Python-2.7.5
+MSYSVPATH=	/Volumes/Android/buildbot/src/android/ndk-release-r20/toolchain/python/Python-2.7.5
+abs_srcdir=	/Volumes/Android/buildbot/src/android/ndk-release-r20/toolchain/python/Python-2.7.5
+abs_builddir=	/Volumes/Android/buildbot/src/android/ndk-release-r20/out/darwin/python/build-python-darwin-x86_64-2.7.5
 build=		x86_64-apple-darwin
 host=		x86_64-apple-darwin
 
@@ -63,7 +63,7 @@ INSTALL_DATA=	${INSTALL} -m 644
 # Also, making them read-only seems to be a good idea...
 INSTALL_SHARED= ${INSTALL} -m 555
 
-MKDIR_P=	/Volumes/Android/buildbot/src/android/ndk-release-r17/toolchain/python/Python-2.7.5/install-sh -c -d
+MKDIR_P=	/Volumes/Android/buildbot/src/android/ndk-release-r20/toolchain/python/Python-2.7.5/install-sh -c -d
 
 MAKESETUP=      $(srcdir)/Modules/makesetup
 
@@ -95,7 +95,7 @@ MACHDEP=	darwin
 MULTIARCH=	
 
 # Install prefix for architecture-independent files
-prefix=		/Volumes/Android/buildbot/src/android/ndk-release-r17/out/python/darwin-x86_64/install/host-tools
+prefix=		/Volumes/Android/buildbot/src/android/ndk-release-r20/out/darwin/python/darwin-x86_64/install/host-tools
 
 # Install prefix for architecture-dependent files
 exec_prefix=	${prefix}
@@ -154,7 +154,7 @@ EXEMODE=	755
 FILEMODE=	644
 
 # configure script arguments
-CONFIG_ARGS=	 '--prefix=/Volumes/Android/buildbot/src/android/ndk-release-r17/out/python/darwin-x86_64/install/host-tools' '--build=x86_64-apple-darwin' '--host=x86_64-apple-darwin' '--with-build-sysroot' '--disable-ipv6' 'build_alias=x86_64-apple-darwin' 'host_alias=x86_64-apple-darwin' 'CC=x86_64-apple-darwin-gcc' 'CFLAGS=-O2 -Os -fomit-frame-pointer -s' 'LDFLAGS='
+CONFIG_ARGS=	 '--prefix=/Volumes/Android/buildbot/src/android/ndk-release-r20/out/darwin/python/darwin-x86_64/install/host-tools' '--build=x86_64-apple-darwin' '--host=x86_64-apple-darwin' '--with-build-sysroot' '--disable-ipv6' 'build_alias=x86_64-apple-darwin' 'host_alias=x86_64-apple-darwin' 'CC=x86_64-apple-darwin-gcc' 'CFLAGS=-O2 -Os -fomit-frame-pointer -s' 'LDFLAGS='
 
 
 # Subdirectories with code

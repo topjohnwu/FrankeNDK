@@ -37,7 +37,6 @@ int main()
 {
     using year                = std::chrono::year;
     using month               = std::chrono::month;
-    using day                 = std::chrono::day;
     using month_day_last      = std::chrono::month_day_last;
     using year_month_day_last = std::chrono::year_month_day_last;
     using years               = std::chrono::years;
@@ -47,7 +46,7 @@ int main()
 
     ASSERT_SAME_TYPE(year_month_day_last&, decltype(std::declval<year_month_day_last&>() += std::declval<years>()));
     ASSERT_SAME_TYPE(year_month_day_last&, decltype(std::declval<year_month_day_last&>() -= std::declval<years>()));
-    
+
     static_assert(testConstexpr<year_month_day_last, years>(year_month_day_last{year{1}, month_day_last{month{1}}}), "");
 
     for (int i = 1000; i <= 1010; ++i)

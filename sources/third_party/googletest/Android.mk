@@ -66,8 +66,6 @@ define gtest-test-suite
         googletest-death-test-test,,libgtest_main,$(1),$(2))) \
     $(eval $(call gtest-unit-test,googletest-filepath-test,, \
         libgtest_main,$(1),$(2))) \
-    $(eval $(call gtest-unit-test,googletest-linked-ptr-test,, \
-        libgtest_main,$(1),$(2))) \
     $(eval $(call gtest-unit-test,googletest-listener-test,, \
         libgtest_main,$(1),$(2))) \
     $(eval $(call gtest-unit-test,googletest-message-test,, \
@@ -82,7 +80,6 @@ define gtest-test-suite
         libgtest_main,$(1),$(2))) \
     $(eval $(call gtest-unit-test,googletest-test-part-test,, \
         libgtest_main,$(1),$(2))) \
-    $(eval $(call gtest-unit-test,googletest-tuple-test,,libgtest_main,$(1),$(2))) \
     $(eval $(call gtest-unit-test, \
         gtest-typed-test_test,test/gtest-typed-test2_test.cc, \
             libgtest_main,$(1),$(2))) \
@@ -97,6 +94,7 @@ define gtest-test-suite
     $(eval $(call gtest-unit-test,gtest_prod_test,test/production.cc, \
             libgtest_main,$(1),$(2))) \
     $(eval $(call gtest-unit-test,gtest_repeat_test,,,$(1),$(2))) \
+    $(eval $(call gtest-unit-test,gtest_skip_test,,libgtest_main,$(1),$(2))) \
     $(eval $(call gtest-unit-test,gtest_sole_header_test,, \
             libgtest_main,$(1),$(2))) \
     $(eval $(call gtest-unit-test,gtest_stress_test,,,$(1),$(2))) \

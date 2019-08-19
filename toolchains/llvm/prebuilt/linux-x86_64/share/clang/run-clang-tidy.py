@@ -68,8 +68,15 @@ def find_compilation_database(path):
   return os.path.realpath(result)
 
 
+def make_absolute(f, directory):
+  if os.path.isabs(f):
+    return f
+  return os.path.normpath(os.path.join(directory, f))
+
+
 def get_tidy_invocation(f, clang_tidy_binary, checks, tmpdir, build_path,
-                        header_filter, extra_arg, extra_arg_before, quiet):
+                        header_filter, extra_arg, extra_arg_before, quiet,
+                        config):
   """Gets a command line for clang-tidy."""
   start = [clang_tidy_binary]
   if header_filter is not None:
@@ -93,6 +100,8 @@ def get_tidy_invocation(f, clang_tidy_binary, checks, tmpdir, build_path,
   start.append('-p=' + build_path)
   if quiet:
       start.append('-quiet')
+  if config:
+      start.append('-config=' + config)
   start.append(f)
   return start
 
@@ -144,16 +153,23 @@ def apply_fixes(args, tmpdir):
   subprocess.call(invocation)
 
 
-def run_tidy(args, tmpdir, build_path, queue):
+def run_tidy(args, tmpdir, build_path, queue, lock, failed_files):
   """Takes filenames out of queue and runs clang-tidy on them."""
   while True:
     name = queue.get()
     invocation = get_tidy_invocation(name, args.clang_tidy_binary, args.checks,
                                      tmpdir, build_path, args.header_filter,
                                      args.extra_arg, args.extra_arg_before,
-                                     args.quiet)
-    sys.stdout.write(' '.join(invocation) + '\n')
-    subprocess.call(invocation)
+                                     args.quiet, args.config)
+
+    proc = subprocess.Popen(invocation, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    output, err = proc.communicate()
+    if proc.returncode != 0:
+      failed_files.append(name)
+    with lock:
+      sys.stdout.write(' '.join(invocation) + '\n' + output.decode('utf-8') + '\n')
+      if len(err) > 0:
+        sys.stderr.write(err.decode('utf-8') + '\n')
     queue.task_done()
 
 
@@ -171,6 +187,14 @@ def main():
   parser.add_argument('-checks', default=None,
                       help='checks filter, when not specified, use clang-tidy '
                       'default')
+  parser.add_argument('-config', default=None,
+                      help='Specifies a configuration in YAML/JSON format: '
+                      '  -config="{Checks: \'*\', '
+                      '                       CheckOptions: [{key: x, '
+                      '                                       value: y}]}" '
+                      'When the value is empty, clang-tidy will '
+                      'attempt to find a file named .clang-tidy for '
+                      'each source file in its parent directories.')
   parser.add_argument('-header-filter', default=None,
                       help='regular expression matching the names of the '
                       'headers to output diagnostics from. Diagnostics from '
@@ -216,14 +240,15 @@ def main():
     if args.checks:
       invocation.append('-checks=' + args.checks)
     invocation.append('-')
-    print(subprocess.check_output(invocation))
+    subprocess.check_call(invocation)
   except:
     print("Unable to run clang-tidy.", file=sys.stderr)
     sys.exit(1)
 
   # Load the database and extract all files.
   database = json.load(open(os.path.join(build_path, db_path)))
-  files = [entry['file'] for entry in database]
+  files = [make_absolute(entry['file'], entry['directory'])
+           for entry in database]
 
   max_task = args.j
   if max_task == 0:
@@ -237,12 +262,16 @@ def main():
   # Build up a big regexy filter from all command line arguments.
   file_name_re = re.compile('|'.join(args.files))
 
+  return_code = 0
   try:
     # Spin up a bunch of tidy-launching threads.
     task_queue = queue.Queue(max_task)
+    # List of files with a non-zero return code.
+    failed_files = []
+    lock = threading.Lock()
     for _ in range(max_task):
       t = threading.Thread(target=run_tidy,
-                           args=(args, tmpdir, build_path, task_queue))
+                           args=(args, tmpdir, build_path, task_queue, lock, failed_files))
       t.daemon = True
       t.start()
 
@@ -253,6 +282,8 @@ def main():
 
     # Wait for all threads to be done.
     task_queue.join()
+    if len(failed_files):
+      return_code = 1
 
   except KeyboardInterrupt:
     # This is a sad hack. Unfortunately subprocess goes
@@ -262,7 +293,6 @@ def main():
       shutil.rmtree(tmpdir)
     os.kill(0, 9)
 
-  return_code = 0
   if args.export_fixes:
     print('Writing fixes to ' + args.export_fixes + ' ...')
     try:

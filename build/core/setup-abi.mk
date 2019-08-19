@@ -37,12 +37,6 @@ $(foreach _plat,3 4 5 8 9 10 11 12 13 14 15 16 17 18 19 20,\
 endif
 
 TARGET_PLATFORM_LEVEL := $(strip $(subst android-,,$(TARGET_PLATFORM)))
-ifneq (,$(call gte,$(TARGET_PLATFORM_LEVEL),$(NDK_FIRST_PIE_PLATFORM_LEVEL)))
-    TARGET_PIE := true
-    $(call ndk_log,  Enabling -fPIE for TARGET_PLATFORM $(TARGET_PLATFORM))
-else
-    TARGET_PIE := false
-endif
 
 # If we're targeting a new enough platform version, we don't actually need to
 # cover any gaps in libc for libc++ support. In those cases, save size in the

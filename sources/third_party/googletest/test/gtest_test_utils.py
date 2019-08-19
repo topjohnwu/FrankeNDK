@@ -36,6 +36,7 @@ import sys
 
 IS_WINDOWS = os.name == 'nt'
 IS_CYGWIN = os.name == 'posix' and 'CYGWIN' in os.uname()[0]
+IS_OS2 = os.name == 'os2'
 
 import atexit
 import shutil
@@ -164,7 +165,7 @@ def GetTestExecutablePath(executable_name, build_dir=None):
 
   path = os.path.abspath(os.path.join(build_dir or GetBuildDir(),
                                       executable_name))
-  if (IS_WINDOWS or IS_CYGWIN) and not path.endswith('.exe'):
+  if (IS_WINDOWS or IS_CYGWIN or IS_OS2) and not path.endswith('.exe'):
     path += '.exe'
 
   if not os.path.exists(path):
@@ -306,8 +307,6 @@ def Main():
   _ParseAndStripGTestFlags(sys.argv)
   # The tested binaries should not be writing XML output files unless the
   # script explicitly instructs them to.
-  # FIXME: Move this into Subprocess when we implement
-  # passing environment into it as a parameter.
   if GTEST_OUTPUT_VAR_NAME in os.environ:
     del os.environ[GTEST_OUTPUT_VAR_NAME]
 

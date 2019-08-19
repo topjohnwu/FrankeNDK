@@ -32,14 +32,13 @@ constexpr bool testConstexpr()
 int main()
 {
     using year  = std::chrono::year;
-    using years = std::chrono::years;
 
     ASSERT_NOEXCEPT(+std::declval<year>());
     ASSERT_NOEXCEPT(-std::declval<year>());
 
     ASSERT_SAME_TYPE(year, decltype(+std::declval<year>()));
     ASSERT_SAME_TYPE(year, decltype(-std::declval<year>()));
-    
+
     static_assert(testConstexpr<year>(), "");
 
     for (int i = 10000; i <= 10020; ++i)

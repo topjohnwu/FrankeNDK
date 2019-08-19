@@ -26,6 +26,7 @@
 #include <algorithm>
 #include <assert.h>
 #include <iterator>
+#include <memory>
 #include <vector>
 
 #include "vulkan/vulkan.h"
@@ -194,8 +195,8 @@ class Device : public internal::Handle<VkDevice> {
 
     // vkCreateDevice()
     void init(const VkDeviceCreateInfo &info);
-    void init(std::vector<const char *> &extensions,
-              VkPhysicalDeviceFeatures *features = nullptr);  // all queues, all extensions, etc
+    void init(std::vector<const char *> &extensions, VkPhysicalDeviceFeatures *features = nullptr,
+              VkPhysicalDeviceFeatures2 *features2 = nullptr);  // all queues, all extensions, etc
     void init() {
         std::vector<const char *> extensions;
         init(extensions);
@@ -204,7 +205,7 @@ class Device : public internal::Handle<VkDevice> {
     const PhysicalDevice &phy() const { return phy_; }
 
     std::vector<const char *> GetEnabledExtensions() { return enabled_extensions_; }
-    bool IsEnbledExtension(const char *extension);
+    bool IsEnabledExtension(const char *extension);
 
     // vkGetDeviceProcAddr()
     PFN_vkVoidFunction get_proc(const char *name) const { return vkGetDeviceProcAddr(handle(), name); }
@@ -213,7 +214,11 @@ class Device : public internal::Handle<VkDevice> {
     const std::vector<Queue *> &graphics_queues() const { return queues_[GRAPHICS]; }
     const std::vector<Queue *> &compute_queues() { return queues_[COMPUTE]; }
     const std::vector<Queue *> &dma_queues() { return queues_[DMA]; }
-    uint32_t queue_family_without_capabilities(VkQueueFlags capabilities);
+
+    typedef std::vector<std::unique_ptr<Queue>> QueueFamilyQueues;
+    typedef std::vector<QueueFamilyQueues> QueueFamilies;
+    const QueueFamilyQueues &queue_family_queues(uint32_t queue_family) const;
+
     uint32_t graphics_queue_node_index_;
 
     struct Format {
@@ -272,6 +277,7 @@ class Device : public internal::Handle<VkDevice> {
 
     std::vector<const char *> enabled_extensions_;
 
+    QueueFamilies queue_families_;
     std::vector<Queue *> queues_[QUEUE_COUNT];
     std::vector<Format> formats_;
 };
@@ -281,12 +287,12 @@ class Queue : public internal::Handle<VkQueue> {
     explicit Queue(VkQueue queue, int index) : Handle(queue) { family_index_ = index; }
 
     // vkQueueSubmit()
-    void submit(const std::vector<const CommandBuffer *> &cmds, Fence &fence);
-    void submit(const CommandBuffer &cmd, Fence &fence);
-    void submit(const CommandBuffer &cmd);
+    VkResult submit(const std::vector<const CommandBuffer *> &cmds, const Fence &fence, bool expect_success = true);
+    VkResult submit(const CommandBuffer &cmd, const Fence &fence, bool expect_success = true);
+    VkResult submit(const CommandBuffer &cmd, bool expect_success = true);
 
     // vkQueueWaitIdle()
-    void wait();
+    VkResult wait();
 
     int get_family_index() { return family_index_; }
 
@@ -324,6 +330,7 @@ class Fence : public internal::NonDispHandle<VkFence> {
 
     // vkGetFenceStatus()
     VkResult status() const { return vkGetFenceStatus(device(), handle()); }
+    VkResult wait(VkBool32 wait_all, uint64_t timeout) const;
 
     static VkFenceCreateInfo create_info(VkFenceCreateFlags flags);
     static VkFenceCreateInfo create_info();

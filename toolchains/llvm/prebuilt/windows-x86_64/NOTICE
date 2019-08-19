@@ -4,7 +4,7 @@ LLVM Release License
 University of Illinois/NCSA
 Open Source License
 
-Copyright (c) 2003-2017 University of Illinois at Urbana-Champaign.
+Copyright (c) 2003-2018 University of Illinois at Urbana-Champaign.
 All rights reserved.
 
 Developed by:
@@ -83,7 +83,7 @@ Full text of the relevant licenses is included below.
 University of Illinois/NCSA
 Open Source License
 
-Copyright (c) 2009-2016 by the contributors listed in CREDITS.TXT
+Copyright (c) 2009-2018 by the contributors listed in CREDITS.TXT
 
 All rights reserved.
 
@@ -252,7 +252,7 @@ Full text of the relevant licenses is included below.
 University of Illinois/NCSA
 Open Source License
 
-Copyright (c) 2009-2017 by the contributors listed in CREDITS.TXT
+Copyright (c) 2009-2018 by the contributors listed in CREDITS.TXT
 
 All rights reserved.
 
@@ -329,7 +329,7 @@ software contained in this directory tree is included below.
 University of Illinois/NCSA
 Open Source License
 
-Copyright (c) 1997-2016 Intel Corporation
+Copyright (c) 1997-2018 Intel Corporation
 
 All rights reserved.
 
@@ -366,7 +366,7 @@ SOFTWARE.
 
 ==============================================================================
 
-Copyright (c) 1997-2016 Intel Corporation
+Copyright (c) 1997-2018 Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -494,7 +494,7 @@ LLVM Release License
 University of Illinois/NCSA
 Open Source License
 
-Copyright (c) 2007-2016 University of Illinois at Urbana-Champaign.
+Copyright (c) 2007-2018 University of Illinois at Urbana-Champaign.
 All rights reserved.
 
 Developed by:
@@ -558,7 +558,7 @@ LLVM Release License
 University of Illinois/NCSA
 Open Source License
 
-Copyright (c) 2007-2016 University of Illinois at Urbana-Champaign.
+Copyright (c) 2007-2018 University of Illinois at Urbana-Champaign.
 All rights reserved.
 
 Developed by:
@@ -622,7 +622,7 @@ lld License
 University of Illinois/NCSA
 Open Source License
 
-Copyright (c) 2011-2016 by the contributors listed in CREDITS.TXT
+Copyright (c) 2011-2018 by the contributors listed in CREDITS.TXT
 All rights reserved.
 
 Developed by:

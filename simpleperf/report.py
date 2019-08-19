@@ -302,6 +302,7 @@ def get_simpleperf_report_help_msg():
     args = [simpleperf_path, 'report', '-h']
     proc = subprocess.Popen(args, stdout=subprocess.PIPE)
     (stdoutdata, _) = proc.communicate()
+    stdoutdata = bytes_to_str(stdoutdata)
     return stdoutdata[stdoutdata.find('\n') + 1:]
 
 

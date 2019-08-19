@@ -29,8 +29,8 @@ import subprocess
 import sys
 import time
 
-from utils import get_script_dir, log_debug, log_info, log_exit, get_target_binary_path, extant_dir
-from utils import AdbHelper, ReadElf, remove
+from utils import AdbHelper, bytes_to_str, extant_dir, get_script_dir, get_target_binary_path
+from utils import log_debug, log_info, log_exit, ReadElf, remove, str_to_bytes
 
 NATIVE_LIBS_DIR_ON_DEVICE = '/data/local/tmp/native_libs/'
 
@@ -121,7 +121,7 @@ class NativeLibDownloader(object):
         if os.path.exists(self.build_id_list_file):
             with open(self.build_id_list_file, 'rb') as fh:
                 for line in fh.readlines():
-                    line = line.strip()
+                    line = bytes_to_str(line).strip()
                     items = line.split('=')
                     if len(items) == 2:
                         self.device_build_id_map[items[0]] = items[1]
@@ -141,7 +141,8 @@ class NativeLibDownloader(object):
         # Push new build_id_list on device.
         with open(self.build_id_list_file, 'wb') as fh:
             for build_id in self.host_build_id_map:
-                fh.write('%s=%s\n' % (build_id, self.host_build_id_map[build_id].name))
+                s = str_to_bytes('%s=%s\n' % (build_id, self.host_build_id_map[build_id].name))
+                fh.write(s)
         self.adb.check_run(['push', self.build_id_list_file,
                             self.dir_on_device + self.build_id_list_file])
         os.remove(self.build_id_list_file)
@@ -241,7 +242,7 @@ class ProfilerBase(object):
             if self.args.disable_adb_root:
                 binary_cache_args += ['--disable_adb_root']
             if self.args.ndk_path:
-                binary_cache_args += ['--ndk-path', self.args.ndk_path]
+                binary_cache_args += ['--ndk_path', self.args.ndk_path]
             subprocess.check_call(binary_cache_args)
 
 
@@ -325,47 +326,69 @@ class NativeCommandProfiler(ProfilerBase):
         self.start_profiling([self.args.cmd])
 
 
+class NativeProcessProfiler(ProfilerBase):
+    """Profile processes given their pids."""
+    def start(self):
+        self.start_profiling(['-p', ','.join(self.args.pid)])
+
+
+class NativeThreadProfiler(ProfilerBase):
+    """Profile threads given their tids."""
+    def start(self):
+        self.start_profiling(['-t', ','.join(self.args.tid)])
+
+
+class SystemWideProfiler(ProfilerBase):
+    """Profile system wide."""
+    def start(self):
+        self.start_profiling(['-a'])
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
 
-    target_group = parser.add_argument_group('Select profiling target')
-    target_type_group = target_group.add_mutually_exclusive_group(required=True)
-    target_type_group.add_argument('-p', '--app',
-                                   help="""Profile an Android app, given the package name.
-                                           Like `-p com.example.android.myapp`.""")
+    target_group = parser.add_argument_group(title='Select profiling target'
+                                            ).add_mutually_exclusive_group(required=True)
+    target_group.add_argument('-p', '--app', help="""Profile an Android app, given the package name.
+                              Like `-p com.example.android.myapp`.""")
 
-    target_type_group.add_argument('-np', '--native_program',
-                                   help="""Profile a native program running on the Android device.
-                                           Like `-np surfaceflinger`.""")
+    target_group.add_argument('-np', '--native_program', help="""Profile a native program running on
+                              the Android device. Like `-np surfaceflinger`.""")
 
-    target_type_group.add_argument('-cmd',
-                                   help="""Profile running a command on the Android device. Like
-                                           `-cmd "pm -l"`.""")
+    target_group.add_argument('-cmd', help="""Profile running a command on the Android device.
+                              Like `-cmd "pm -l"`.""")
 
-    target_group.add_argument('--compile_java_code', action='store_true',
-                              help="""Used with -p. On Android N and Android O, we need to compile
-                                      Java code into native instructions to profile Java code.
-                                      Android O also needs wrap.sh in the apk to use the native
-                                      instructions.""")
+    target_group.add_argument('--pid', nargs='+', help="""Profile native processes running on device
+                              given their process ids.""")
 
-    target_start_group = target_group.add_mutually_exclusive_group(required=False)
-    target_start_group.add_argument('-a', '--activity',
-                                    help="""Used with -p. Profile the launch time of an activity in
-                                            an Android app. The app will be started or restarted to
-                                            run the activity. Like `-a .MainActivity`.""")
+    target_group.add_argument('--tid', nargs='+', help="""Profile native threads running on device
+                              given their thread ids.""")
 
-    target_start_group.add_argument('-t', '--test',
-                                    help="""Used with -p. Profile the launch time of an
-                                            instrumentation test in an Android app. The app will be
-                                            started or restarted to run the instrumentation test.
-                                            Like `-t test_class_name`.""")
+    target_group.add_argument('--system_wide', action='store_true', help="""Profile system wide.""")
+
+    app_target_group = parser.add_argument_group(title='Extra options for profiling an app')
+    app_target_group.add_argument('--compile_java_code', action='store_true', help="""Used with -p.
+                                  On Android N and Android O, we need to compile Java code into
+                                  native instructions to profile Java code. Android O also needs
+                                  wrap.sh in the apk to use the native instructions.""")
+
+    app_start_group = app_target_group.add_mutually_exclusive_group()
+    app_start_group.add_argument('-a', '--activity', help="""Used with -p. Profile the launch time
+                                 of an activity in an Android app. The app will be started or
+                                 restarted to run the activity. Like `-a .MainActivity`.""")
+
+    app_start_group.add_argument('-t', '--test', help="""Used with -p. Profile the launch time of an
+                                 instrumentation test in an Android app. The app will be started or
+                                 restarted to run the instrumentation test. Like
+                                 `-t test_class_name`.""")
 
     record_group = parser.add_argument_group('Select recording options')
     record_group.add_argument('-r', '--record_options',
-                              default='-e task-clock:u -f 1000 -g --duration 10',
-                              help="""Set recording options for `simpleperf record` command.
-                                      Default is "-e task-clock:u -f 1000 -g --duration 10".""")
+                              default='-e task-clock:u -f 1000 -g --duration 10', help="""Set
+                              recording options for `simpleperf record` command. Use
+                              `run_simpleperf_on_device.py record -h` to see all accepted options.
+                              Default is "-e task-clock:u -f 1000 -g --duration 10".""")
 
     record_group.add_argument('-lib', '--native_lib_dir', type=extant_dir,
                               help="""When profiling an Android app containing native libraries,
@@ -407,6 +430,12 @@ def main():
         profiler = NativeProgramProfiler(args)
     elif args.cmd:
         profiler = NativeCommandProfiler(args)
+    elif args.pid:
+        profiler = NativeProcessProfiler(args)
+    elif args.tid:
+        profiler = NativeThreadProfiler(args)
+    elif args.system_wide:
+        profiler = SystemWideProfiler(args)
     profiler.profile()
 
 if __name__ == '__main__':

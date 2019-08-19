@@ -53,48 +53,22 @@ ifndef APP_PLATFORM
     endif
 endif
 
+endif # APP_PROJECT_PATH == null
+
 ifeq ($(APP_PLATFORM),latest)
     $(call __ndk_info,Using latest available APP_PLATFORM: $(NDK_MAX_PLATFORM).)
     override APP_PLATFORM := $(NDK_MAX_PLATFORM)
 endif
 
-# Handle any platform codenames.
-ifeq ($(APP_PLATFORM),android-I)
-    override APP_PLATFORM := android-14
-else ifeq ($(APP_PLATFORM),android-J)
-    override APP_PLATFORM := android-16
-else ifeq ($(APP_PLATFORM),android-J-MR1)
-    override APP_PLATFORM := android-17
-else ifeq ($(APP_PLATFORM),android-J-MR2)
-    override APP_PLATFORM := android-18
-else ifeq ($(APP_PLATFORM),android-K)
-    override APP_PLATFORM := android-19
-else ifeq ($(APP_PLATFORM),android-L)
-    override APP_PLATFORM := android-21
-else ifeq ($(APP_PLATFORM),android-L-MR1)
-    override APP_PLATFORM := android-22
-else ifeq ($(APP_PLATFORM),android-M)
-    override APP_PLATFORM := android-23
-else ifeq ($(APP_PLATFORM),android-N)
-    override APP_PLATFORM := android-24
-else ifeq ($(APP_PLATFORM),android-N-MR1)
-    override APP_PLATFORM := android-25
-else ifeq ($(APP_PLATFORM),android-O)
-    override APP_PLATFORM := android-26
-endif
-
-endif # APP_PROJECT_PATH == null
-
-# Though the platform emits library directories for every API level, the
-# deprecated headers have gaps, and we only end up shipping libraries that match
-# a directory for which we actually have deprecated headers. We'll need to fix
-# this soon since we'll be adding O APIs to only the new headers, but for now
-# just preserve the old behavior.
+# Aliases defined by meta/platforms.json include codename aliases for platform
+# API levels as well as cover any gaps in platforms that may not have had NDK
+# APIs.
 APP_PLATFORM_LEVEL := $(strip $(subst android-,,$(APP_PLATFORM)))
-ifneq (,$(filter 20,$(APP_PLATFORM_LEVEL)))
-    override APP_PLATFORM := android-19
-else ifneq (,$(filter 25,$(APP_PLATFORM_LEVEL)))
-    override APP_PLATFORM := android-24
+ifdef NDK_PLATFORM_ALIAS_$(APP_PLATFORM_LEVEL)
+    _alias_target := $(NDK_PLATFORM_ALIAS_$(APP_PLATFORM_LEVEL))
+    $(call __ndk_info,$(APP_PLATFORM) is an alias for $(_alias_target). \
+        Adjusting APP_PLATFORM to match.)
+    override APP_PLATFORM := $(_alias_target)
 endif
 
 # For APP_PLATFORM values set below the minimum supported version, we could

@@ -66,9 +66,6 @@ DEFAULT_PPL_VERSION=1.0
 DEFAULT_PYTHON_VERSION=2.7.5
 DEFAULT_PERL_VERSION=5.16.2
 
-# Default platform to build target binaries against.
-DEFAULT_PLATFORM=android-14
-
 # The list of default CPU architectures we support
 DEFAULT_ARCHS="arm x86 mips arm64 x86_64 mips64"
 

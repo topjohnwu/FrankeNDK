@@ -1,4 +1,3 @@
-
 //===----------------------------------------------------------------------===//
 //
 //                     The LLVM Compiler Infrastructure
@@ -11,12 +10,14 @@
 // <new> feature macros
 
 /*  Constant                                    Value
+    __cpp_lib_destroying_delete                 201806L
     __cpp_lib_hardware_interference_size        201703L
     __cpp_lib_launder                           201606L
 
 */
 
 #include <new>
+#include <cassert>
 #include "test_macros.h"
 
 int main()

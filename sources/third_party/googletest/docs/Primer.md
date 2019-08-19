@@ -61,21 +61,19 @@ The related term _Test_, as it is used in the googletest, is corresponding to
 the term _[Test Case](http://glossary.istqb.org/search/test%20case)_ of ISTQB
 and others.
 
-The term _Test_ is commonly of broad enough sense, including ISTQB's
-definition of _Test Case_, so it's not much of a problem here. But the
-term _Test Case_ as used in Google Test is of contradictory sense and thus confusing.
+The term _Test_ is commonly of broad enough sense, including ISTQB's definition
+of _Test Case_, so it's not much of a problem here. But the term _Test Case_ as
+was used in Google Test is of contradictory sense and thus confusing.
 
-Unfortunately replacing the term _Test Case_ by _Test Suite_ throughout the
-googletest is not easy without breaking dependent projects, as `TestCase` is
-part of the public API at various places.
+googletest recently started replacing the term _Test Case_ by _Test Suite_ The
+preferred API is TestSuite*. The older TestCase* API is being slowly deprecated
+and refactored away
 
-So for the time being, please be aware of the different definitions of
-the terms:
+So please be aware of the different definitions of the terms:
 
 Meaning                                                                              | googletest Term                                                                                            | [ISTQB](http://www.istqb.org/) Term
 :----------------------------------------------------------------------------------- | :--------------------------------------------------------------------------------------------------------- | :----------------------------------
 Exercise a particular program path with specific input values and verify the results | [TEST()](#simple-tests)                                                                                    | [Test Case](http://glossary.istqb.org/search/test%20case)
-A set of several tests related to one component                                      | [TestCase](#basic-concepts) | [TestSuite](http://glossary.istqb.org/search/test%20suite)
 
 ## Basic Concepts
 
@@ -198,7 +196,7 @@ objects, you should use `ASSERT_EQ`.
 
 When doing pointer comparisons use `*_EQ(ptr, nullptr)` and `*_NE(ptr, nullptr)`
 instead of `*_EQ(ptr, NULL)` and `*_NE(ptr, NULL)`. This is because `nullptr` is
-typed while `NULL` is not. See [FAQ](faq.md#why-does-google-test-support-expect_eqnull-ptr-and-assert_eqnull-ptr-but-not-expect_nenull-ptr-and-assert_nenull-ptr)
+typed while `NULL` is not. See [FAQ](faq.md#why-does-googletest-support-expect_eqnull-ptr-and-assert_eqnull-ptr-but-not-expect_nenull-ptr-and-assert_nenull-ptr)
 for more details.
 
 If you're working with floating point numbers, you may want to use the floating
@@ -252,7 +250,7 @@ To create a test:
     entire test fails. Otherwise, it succeeds.
 
 ```c++
-TEST(TestCaseName, TestName) {
+TEST(TestSuiteName, TestName) {
   ... test body ...
 }
 ```
@@ -324,7 +322,7 @@ When using a fixture, use `TEST_F()` instead of `TEST()` as it allows you to
 access objects and subroutines in the test fixture:
 
 ```c++
-TEST_F(TestCaseName, TestName) {
+TEST_F(TestSuiteName, TestName) {
   ... test body ...
 }
 ```
@@ -471,17 +469,14 @@ If a fatal failure happens the subsequent steps will be skipped.
 >
 > Also, you should call `RUN_ALL_TESTS()` only **once**. Calling it more than
 > once conflicts with some advanced googletest features (e.g. thread-safe [death
-> tests](advanced#death-tests)) and thus is not supported.
+> tests](advanced.md#death-tests)) and thus is not supported.
 
 **Availability**: Linux, Windows, Mac.
 
 ## Writing the main() Function
 
-In `google3`, the simplest approach is to use the default main() function
-provided by linking in `"//testing/base/public:gtest_main"`. If that doesn't
-cover what you need, you should write your own main() function, which should
-return the value of `RUN_ALL_TESTS()`. Link to `"//testing/base/public:gunit"`.
-You can start from this boilerplate:
+Write your own main() function, which should
+return the value of `RUN_ALL_TESTS()`
 
 ```c++
 #include "this/package/foo.h"

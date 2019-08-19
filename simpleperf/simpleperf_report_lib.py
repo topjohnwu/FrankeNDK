@@ -20,12 +20,10 @@
 
 """
 
+import collections
 import ctypes as ct
-import os
-import subprocess
-import sys
-import unittest
-from utils import *
+import struct
+from utils import bytes_to_str, get_host_binary_path, is_windows, str_to_bytes
 
 
 def _get_native_lib():
@@ -45,6 +43,10 @@ def _char_pt(s):
 def _char_pt_to_str(char_pt):
     return bytes_to_str(char_pt)
 
+def _check(cond, failmsg):
+    if not cond:
+        raise RuntimeError(failmsg)
+
 
 class SampleStruct(ct.Structure):
     """ Instance of a sample in perf.data.
@@ -63,16 +65,90 @@ class SampleStruct(ct.Structure):
     _fields_ = [('ip', ct.c_uint64),
                 ('pid', ct.c_uint32),
                 ('tid', ct.c_uint32),
-                ('thread_comm', ct.c_char_p),
+                ('_thread_comm', ct.c_char_p),
                 ('time', ct.c_uint64),
                 ('in_kernel', ct.c_uint32),
                 ('cpu', ct.c_uint32),
                 ('period', ct.c_uint64)]
 
+    @property
+    def thread_comm(self):
+        return _char_pt_to_str(self._thread_comm)
+
+
+class TracingFieldFormatStruct(ct.Structure):
+    """Format of a tracing field.
+       name: name of the field.
+       offset: offset of the field in tracing data.
+       elem_size: size of the element type.
+       elem_count: the number of elements in this field, more than one if the field is an array.
+       is_signed: whether the element type is signed or unsigned.
+    """
+    _fields_ = [('_name', ct.c_char_p),
+                ('offset', ct.c_uint32),
+                ('elem_size', ct.c_uint32),
+                ('elem_count', ct.c_uint32),
+                ('is_signed', ct.c_uint32)]
+
+    _unpack_key_dict = {1: 'b', 2: 'h', 4: 'i', 8: 'q'}
+
+    @property
+    def name(self):
+        return _char_pt_to_str(self._name)
+
+    def parse_value(self, data):
+        """ Parse value of a field in a tracepoint event.
+            The return value depends on the type of the field, and can be an int value, a string,
+            an array of int values, etc. If the type can't be parsed, return a byte array or an
+            array of byte arrays.
+        """
+        if self.elem_count > 1 and self.elem_size == 1 and self.is_signed == 0:
+            # The field is a string.
+            length = 0
+            while length < self.elem_count and bytes_to_str(data[self.offset + length]) != '\x00':
+                length += 1
+            return bytes_to_str(data[self.offset : self.offset + length])
+        unpack_key = self._unpack_key_dict.get(self.elem_size)
+        if unpack_key:
+            if not self.is_signed:
+                unpack_key = unpack_key.upper()
+            value = struct.unpack('%d%s' % (self.elem_count, unpack_key),
+                                  data[self.offset:self.offset + self.elem_count * self.elem_size])
+        else:
+            # Since we don't know the element type, just return the bytes.
+            value = []
+            offset = self.offset
+            for _ in range(self.elem_count):
+                value.append(data[offset : offset + self.elem_size])
+                offset += self.elem_size
+        if self.elem_count == 1:
+            value = value[0]
+        return value
+
+
+class TracingDataFormatStruct(ct.Structure):
+    """Format of tracing data of a tracepoint event, like
+       https://www.kernel.org/doc/html/latest/trace/events.html#event-formats.
+       size: total size of all fields in the tracing data.
+       field_count: the number of fields.
+       fields: an array of fields.
+    """
+    _fields_ = [('size', ct.c_uint32),
+                ('field_count', ct.c_uint32),
+                ('fields', ct.POINTER(TracingFieldFormatStruct))]
+
 
 class EventStruct(ct.Structure):
-    """ Name of the event. """
-    _fields_ = [('name', ct.c_char_p)]
+    """Event type of a sample.
+       name: name of the event type.
+       tracing_data_format: only available when it is a tracepoint event.
+    """
+    _fields_ = [('_name', ct.c_char_p),
+                ('tracing_data_format', TracingDataFormatStruct)]
+
+    @property
+    def name(self):
+        return _char_pt_to_str(self._name)
 
 
 class MappingStruct(ct.Structure):
@@ -95,12 +171,20 @@ class SymbolStruct(ct.Structure):
         symbol_len: length of the function in the shared library.
         mapping: the mapping area hit by the instruction.
     """
-    _fields_ = [('dso_name', ct.c_char_p),
+    _fields_ = [('_dso_name', ct.c_char_p),
                 ('vaddr_in_file', ct.c_uint64),
-                ('symbol_name', ct.c_char_p),
+                ('_symbol_name', ct.c_char_p),
                 ('symbol_addr', ct.c_uint64),
                 ('symbol_len', ct.c_uint64),
                 ('mapping', ct.POINTER(MappingStruct))]
+
+    @property
+    def dso_name(self):
+        return _char_pt_to_str(self._dso_name)
+
+    @property
+    def symbol_name(self):
+        return _char_pt_to_str(self._symbol_name)
 
 
 class CallChainEntryStructure(ct.Structure):
@@ -134,51 +218,11 @@ class FeatureSectionStructure(ct.Structure):
                 ('data_size', ct.c_uint32)]
 
 
-# convert char_p to str for python3.
-class SampleStructUsingStr(object):
-    def __init__(self, sample):
-        self.ip = sample.ip
-        self.pid = sample.pid
-        self.tid = sample.tid
-        self.thread_comm = _char_pt_to_str(sample.thread_comm)
-        self.time = sample.time
-        self.in_kernel = sample.in_kernel
-        self.cpu = sample.cpu
-        self.period = sample.period
-
-
-class EventStructUsingStr(object):
-    def __init__(self, event):
-        self.name = _char_pt_to_str(event.name)
-
-
-class SymbolStructUsingStr(object):
-    def __init__(self, symbol):
-        self.dso_name = _char_pt_to_str(symbol.dso_name)
-        self.vaddr_in_file = symbol.vaddr_in_file
-        self.symbol_name = _char_pt_to_str(symbol.symbol_name)
-        self.symbol_addr = symbol.symbol_addr
-        self.mapping = symbol.mapping
-
-
-class CallChainEntryStructureUsingStr(object):
-    def __init__(self, entry):
-        self.ip = entry.ip
-        self.symbol = SymbolStructUsingStr(entry.symbol)
-
-
-class CallChainStructureUsingStr(object):
-    def __init__(self, callchain):
-        self.nr = callchain.nr
-        self.entries = []
-        for i in range(self.nr):
-            self.entries.append(CallChainEntryStructureUsingStr(callchain.entries[i]))
-
-
 class ReportLibStructure(ct.Structure):
     _fields_ = []
 
 
+# pylint: disable=invalid-name
 class ReportLib(object):
 
     def __init__(self, native_lib_path=None):
@@ -203,8 +247,9 @@ class ReportLib(object):
         self._GetSymbolOfCurrentSampleFunc = self._lib.GetSymbolOfCurrentSample
         self._GetSymbolOfCurrentSampleFunc.restype = ct.POINTER(SymbolStruct)
         self._GetCallChainOfCurrentSampleFunc = self._lib.GetCallChainOfCurrentSample
-        self._GetCallChainOfCurrentSampleFunc.restype = ct.POINTER(
-            CallChainStructure)
+        self._GetCallChainOfCurrentSampleFunc.restype = ct.POINTER(CallChainStructure)
+        self._GetTracingDataOfCurrentSampleFunc = self._lib.GetTracingDataOfCurrentSample
+        self._GetTracingDataOfCurrentSampleFunc.restype = ct.POINTER(ct.c_char)
         self._GetBuildIdForPathFunc = self._lib.GetBuildIdForPath
         self._GetBuildIdForPathFunc.restype = ct.c_char_p
         self._GetFeatureSection = self._lib.GetFeatureSection
@@ -212,7 +257,6 @@ class ReportLib(object):
         self._instance = self._CreateReportLibFunc()
         assert not _is_null(self._instance)
 
-        self.convert_to_str = (sys.version_info >= (3, 0))
         self.meta_info = None
         self.current_sample = None
         self.record_cmd = None
@@ -231,17 +275,17 @@ class ReportLib(object):
     def SetLogSeverity(self, log_level='info'):
         """ Set log severity of native lib, can be verbose,debug,info,error,fatal."""
         cond = self._SetLogSeverityFunc(self.getInstance(), _char_pt(log_level))
-        self._check(cond, 'Failed to set log level')
+        _check(cond, 'Failed to set log level')
 
     def SetSymfs(self, symfs_dir):
         """ Set directory used to find symbols."""
         cond = self._SetSymfsFunc(self.getInstance(), _char_pt(symfs_dir))
-        self._check(cond, 'Failed to set symbols directory')
+        _check(cond, 'Failed to set symbols directory')
 
     def SetRecordFile(self, record_file):
         """ Set the path of record file, like perf.data."""
         cond = self._SetRecordFileFunc(self.getInstance(), _char_pt(record_file))
-        self._check(cond, 'Failed to set record file')
+        _check(cond, 'Failed to set record file')
 
     def ShowIpForUnknownSymbol(self):
         self._ShowIpForUnknownSymbolFunc(self.getInstance())
@@ -253,15 +297,14 @@ class ReportLib(object):
     def SetKallsymsFile(self, kallsym_file):
         """ Set the file path to a copy of the /proc/kallsyms file (for off device decoding) """
         cond = self._SetKallsymsFileFunc(self.getInstance(), _char_pt(kallsym_file))
-        self._check(cond, 'Failed to set kallsyms file')
+        _check(cond, 'Failed to set kallsyms file')
 
     def GetNextSample(self):
         psample = self._GetNextSampleFunc(self.getInstance())
         if _is_null(psample):
             self.current_sample = None
         else:
-            sample = psample[0]
-            self.current_sample = SampleStructUsingStr(sample) if self.convert_to_str else sample
+            self.current_sample = psample[0]
         return self.current_sample
 
     def GetCurrentSample(self):
@@ -270,23 +313,28 @@ class ReportLib(object):
     def GetEventOfCurrentSample(self):
         event = self._GetEventOfCurrentSampleFunc(self.getInstance())
         assert not _is_null(event)
-        if self.convert_to_str:
-            return EventStructUsingStr(event[0])
         return event[0]
 
     def GetSymbolOfCurrentSample(self):
         symbol = self._GetSymbolOfCurrentSampleFunc(self.getInstance())
         assert not _is_null(symbol)
-        if self.convert_to_str:
-            return SymbolStructUsingStr(symbol[0])
         return symbol[0]
 
     def GetCallChainOfCurrentSample(self):
         callchain = self._GetCallChainOfCurrentSampleFunc(self.getInstance())
         assert not _is_null(callchain)
-        if self.convert_to_str:
-            return CallChainStructureUsingStr(callchain[0])
         return callchain[0]
+
+    def GetTracingDataOfCurrentSample(self):
+        data = self._GetTracingDataOfCurrentSampleFunc(self.getInstance())
+        if _is_null(data):
+            return None
+        event = self.GetEventOfCurrentSample()
+        result = collections.OrderedDict()
+        for i in range(event.tracing_data_format.field_count):
+            field = event.tracing_data_format.fields[i]
+            result[field.name] = field.parse_value(data)
+        return result
 
     def GetBuildIdForPath(self, path):
         build_id = self._GetBuildIdForPathFunc(self.getInstance(), _char_pt(path))
@@ -364,7 +412,3 @@ class ReportLib(object):
         if self._instance is None:
             raise Exception('Instance is Closed')
         return self._instance
-
-    def _check(self, cond, failmsg):
-        if not cond:
-            raise Exception(failmsg)

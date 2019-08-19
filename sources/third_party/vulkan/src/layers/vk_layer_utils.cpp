@@ -73,12 +73,8 @@ VK_LAYER_EXPORT VkStringErrorFlags vk_string_validate(const int max_length, cons
     return result;
 }
 
-// Utility function for finding a text string in another string
-VK_LAYER_EXPORT bool white_list(const char *item, const char *list) {
-    std::string candidate(item);
-    std::string white_list(list);
-    return (white_list.find(candidate) != std::string::npos);
-}
+// Utility function for determining if a string is in a set of strings
+VK_LAYER_EXPORT bool white_list(const char *item, const std::set<std::string> &list) { return (list.find(item) != list.end()); }
 
 // Debug callbacks get created in three ways:
 //   o  Application-defined debug callbacks
@@ -91,8 +87,9 @@ VK_LAYER_EXPORT bool white_list(const char *item, const char *list) {
 // If a vk_layer_settings.txt file is present and an application defines a debug callback, both callbacks
 // will be active.  If no vk_layer_settings.txt file is present, creating an application-defined debug
 // callback will cause the default callbacks to be unregisterd and removed.
-VK_LAYER_EXPORT void layer_debug_actions(debug_report_data *report_data, std::vector<VkDebugReportCallbackEXT> &logging_callback,
-                                         const VkAllocationCallbacks *pAllocator, const char *layer_identifier) {
+VK_LAYER_EXPORT void layer_debug_report_actions(debug_report_data *report_data,
+                                                std::vector<VkDebugReportCallbackEXT> &logging_callback,
+                                                const VkAllocationCallbacks *pAllocator, const char *layer_identifier) {
     VkDebugReportCallbackEXT callback = VK_NULL_HANDLE;
 
     std::string report_flags_key = layer_identifier;
@@ -115,9 +112,9 @@ VK_LAYER_EXPORT void layer_debug_actions(debug_report_data *report_data, std::ve
         memset(&dbgCreateInfo, 0, sizeof(dbgCreateInfo));
         dbgCreateInfo.sType = VK_STRUCTURE_TYPE_DEBUG_REPORT_CREATE_INFO_EXT;
         dbgCreateInfo.flags = report_flags;
-        dbgCreateInfo.pfnCallback = log_callback;
+        dbgCreateInfo.pfnCallback = report_log_callback;
         dbgCreateInfo.pUserData = (void *)log_output;
-        layer_create_msg_callback(report_data, default_layer_callback, &dbgCreateInfo, pAllocator, &callback);
+        layer_create_report_callback(report_data, default_layer_callback, &dbgCreateInfo, pAllocator, &callback);
         logging_callback.push_back(callback);
     }
 
@@ -128,9 +125,9 @@ VK_LAYER_EXPORT void layer_debug_actions(debug_report_data *report_data, std::ve
         memset(&dbgCreateInfo, 0, sizeof(dbgCreateInfo));
         dbgCreateInfo.sType = VK_STRUCTURE_TYPE_DEBUG_REPORT_CREATE_INFO_EXT;
         dbgCreateInfo.flags = report_flags;
-        dbgCreateInfo.pfnCallback = win32_debug_output_msg;
+        dbgCreateInfo.pfnCallback = report_win32_debug_output_msg;
         dbgCreateInfo.pUserData = NULL;
-        layer_create_msg_callback(report_data, default_layer_callback, &dbgCreateInfo, pAllocator, &callback);
+        layer_create_report_callback(report_data, default_layer_callback, &dbgCreateInfo, pAllocator, &callback);
         logging_callback.push_back(callback);
     }
 
@@ -143,7 +140,82 @@ VK_LAYER_EXPORT void layer_debug_actions(debug_report_data *report_data, std::ve
         dbgCreateInfo.flags = report_flags;
         dbgCreateInfo.pfnCallback = DebugBreakCallback;
         dbgCreateInfo.pUserData = NULL;
-        layer_create_msg_callback(report_data, default_layer_callback, &dbgCreateInfo, pAllocator, &callback);
+        layer_create_report_callback(report_data, default_layer_callback, &dbgCreateInfo, pAllocator, &callback);
         logging_callback.push_back(callback);
     }
+}
+
+VK_LAYER_EXPORT void layer_debug_messenger_actions(debug_report_data *report_data,
+                                                   std::vector<VkDebugUtilsMessengerEXT> &logging_messenger,
+                                                   const VkAllocationCallbacks *pAllocator, const char *layer_identifier) {
+    VkDebugUtilsMessengerEXT messenger = VK_NULL_HANDLE;
+
+    std::string report_flags_key = layer_identifier;
+    std::string debug_action_key = layer_identifier;
+    std::string log_filename_key = layer_identifier;
+    report_flags_key.append(".report_flags");
+    debug_action_key.append(".debug_action");
+    log_filename_key.append(".log_filename");
+
+    // Initialize layer options
+    VkDebugReportFlagsEXT report_flags = GetLayerOptionFlags(report_flags_key, report_flags_option_definitions, 0);
+    VkLayerDbgActionFlags debug_action = GetLayerOptionFlags(debug_action_key, debug_actions_option_definitions, 0);
+    // Flag as default if these settings are not from a vk_layer_settings.txt file
+    bool default_layer_callback = (debug_action & VK_DBG_LAYER_ACTION_DEFAULT) ? true : false;
+    VkDebugUtilsMessengerCreateInfoEXT dbgCreateInfo;
+    memset(&dbgCreateInfo, 0, sizeof(dbgCreateInfo));
+    dbgCreateInfo.sType = VK_STRUCTURE_TYPE_DEBUG_REPORT_CREATE_INFO_EXT;
+    dbgCreateInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT;
+    if (report_flags & VK_DEBUG_REPORT_ERROR_BIT_EXT) {
+        dbgCreateInfo.messageSeverity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+    }
+    if (report_flags & VK_DEBUG_REPORT_WARNING_BIT_EXT) {
+        dbgCreateInfo.messageSeverity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT;
+    }
+    if (report_flags & VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT) {
+        dbgCreateInfo.messageSeverity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT;
+        dbgCreateInfo.messageType |= VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+    }
+    if (report_flags & VK_DEBUG_REPORT_INFORMATION_BIT_EXT) {
+        dbgCreateInfo.messageSeverity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT;
+    }
+    if (report_flags & VK_DEBUG_REPORT_DEBUG_BIT_EXT) {
+        dbgCreateInfo.messageSeverity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT;
+    }
+
+    if (debug_action & VK_DBG_LAYER_ACTION_LOG_MSG) {
+        const char *log_filename = getLayerOption(log_filename_key.c_str());
+        FILE *log_output = getLayerLogOutput(log_filename, layer_identifier);
+        dbgCreateInfo.pfnUserCallback = messenger_log_callback;
+        dbgCreateInfo.pUserData = (void *)log_output;
+        layer_create_messenger_callback(report_data, default_layer_callback, &dbgCreateInfo, pAllocator, &messenger);
+        logging_messenger.push_back(messenger);
+    }
+
+    messenger = VK_NULL_HANDLE;
+
+    if (debug_action & VK_DBG_LAYER_ACTION_DEBUG_OUTPUT) {
+        dbgCreateInfo.pfnUserCallback = messenger_win32_debug_output_msg;
+        dbgCreateInfo.pUserData = NULL;
+        layer_create_messenger_callback(report_data, default_layer_callback, &dbgCreateInfo, pAllocator, &messenger);
+        logging_messenger.push_back(messenger);
+    }
+}
+
+VK_LAYER_EXPORT VkLayerInstanceCreateInfo *get_chain_info(const VkInstanceCreateInfo *pCreateInfo, VkLayerFunction func) {
+    VkLayerInstanceCreateInfo *chain_info = (VkLayerInstanceCreateInfo *)pCreateInfo->pNext;
+    while (chain_info && !(chain_info->sType == VK_STRUCTURE_TYPE_LOADER_INSTANCE_CREATE_INFO && chain_info->function == func)) {
+        chain_info = (VkLayerInstanceCreateInfo *)chain_info->pNext;
+    }
+    assert(chain_info != NULL);
+    return chain_info;
+}
+
+VK_LAYER_EXPORT VkLayerDeviceCreateInfo *get_chain_info(const VkDeviceCreateInfo *pCreateInfo, VkLayerFunction func) {
+    VkLayerDeviceCreateInfo *chain_info = (VkLayerDeviceCreateInfo *)pCreateInfo->pNext;
+    while (chain_info && !(chain_info->sType == VK_STRUCTURE_TYPE_LOADER_DEVICE_CREATE_INFO && chain_info->function == func)) {
+        chain_info = (VkLayerDeviceCreateInfo *)chain_info->pNext;
+    }
+    assert(chain_info != NULL);
+    return chain_info;
 }

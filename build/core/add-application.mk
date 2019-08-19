@@ -62,19 +62,6 @@ endif
 
 include $(BUILD_SYSTEM)/setup-app-platform.mk
 
-# If APP_PIE isn't defined, set it to true for android-$(NDK_FIRST_PIE_PLATFORM_LEVEL) and above
-#
-APP_PIE := $(strip $(APP_PIE))
-$(call ndk_log,  APP_PIE is $(APP_PIE))
-ifndef APP_PIE
-    ifneq (,$(call gte,$(APP_PLATFORM_LEVEL),$(NDK_FIRST_PIE_PLATFORM_LEVEL)))
-        APP_PIE := true
-        $(call ndk_log,  Enabling -fPIE)
-    else
-        APP_PIE := false
-    endif
-endif
-
 # Check that the value of APP_ABI corresponds to known ABIs
 # 'all' is a special case that means 'all supported ABIs'
 #
@@ -187,15 +174,13 @@ APP_STL := $(strip $(APP_STL))
 ifndef APP_STL
     APP_STL := system
 else
+    ifneq ($(filter $(APP_STL),gnustl_static gnustl_shared stlport_static stlport_shared),)
+        $(call __ndk_error,APP_STL $(APP_STL) is no longer supported. Please \
+            switch to either c++_static or c++_shared. See \
+            https://developer.android.com/ndk/guides/cpp-support.html for more \
+            information.)
+    endif
     $(call ndk-stl-check,$(APP_STL))
-endif
-
-ifneq ($(filter $(APP_STL),gnustl_static gnustl_shared stlport_static stlport_shared),)
-    $(call __ndk_info,WARNING: APP_STL $(APP_STL) is deprecated and will be \
-        removed in the next release. Please switch to either c++_static or \
-        c++_shared. See \
-        https://developer.android.com/ndk/guides/cpp-support.html for more \
-        information.)
 endif
 
 # wrap.sh files can be specified in the user's Application.mk in either an
@@ -229,6 +214,20 @@ else
     # one, install the generic one for all ABIs.
     $(foreach _abi,$(NDK_ALL_ABIS),\
         $(eval APP_WRAP_SH_$(_abi) := $(APP_WRAP_SH)))
+endif
+
+# Stripping can be configured both at the app (APP_STRIP_MODE) and module level
+# (LOCAL_STRIP_MODE). The module setting always overrides the application
+# setting.
+#
+# This value is passed as-is as the flag to the strip command except when it is
+# set to the special value "none". If set to "none", the binary will not be
+# stripped at all.
+ifeq ($(APP_STRIP_MODE),)
+    # The strip command is only used for shared libraries and executables. It is
+    # thus safe to use --strip-unneeded, which is only dangerous when applied to
+    # static libraries or object files.
+    APP_STRIP_MODE := --strip-unneeded
 endif
 
 $(if $(call get,$(_map),defined),\

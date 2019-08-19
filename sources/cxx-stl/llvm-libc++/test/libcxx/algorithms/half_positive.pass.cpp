@@ -9,11 +9,8 @@
 
 // <algorithm>
 
-// template <typename _Tp> _Tp __half_positive(const _Tp&);
-
-// __half_positive divide integer number by 2 as unsigned number
-// if it's safe to do so. It can be an important optimization for lower bound,
-// for example.
+// __half_positive divides an integer number by 2 as unsigned number for known types.
+// It can be an important optimization for lower bound, for example.
 
 #include <algorithm>
 #include <cassert>

@@ -68,13 +68,12 @@ def SetEnvVar(env_var, value):
 def Run(command):
   """Runs a command; returns True/False if its exit code is/isn't 0."""
 
-  print 'Running "%s". . .' % ' '.join(command)
+  print('Running "%s". . .' % ' '.join(command))
   p = gtest_test_utils.Subprocess(command)
   return p.exited and p.exit_code == 0
 
 
-# The tests.  FIXME: refactor the class to share common
-# logic with code in googletest-break-on-failure-unittest.py.
+# The tests.
 class ThrowOnFailureTest(gtest_test_utils.TestCase):
   """Tests the throw-on-failure mode."""
 

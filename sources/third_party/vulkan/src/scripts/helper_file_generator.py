@@ -19,11 +19,13 @@
 #
 # Author: Mark Lobodzinski <mark@lunarg.com>
 # Author: Tobin Ehlis <tobine@google.com>
+# Author: John Zulauf <jzulauf@lunarg.com>
 
 import os,re,sys
 import xml.etree.ElementTree as etree
 from generator import *
 from collections import namedtuple
+from common_codegen import *
 
 #
 # HelperFileOutputGeneratorOptions - subclass of GeneratorOptions.
@@ -38,28 +40,26 @@ class HelperFileOutputGeneratorOptions(GeneratorOptions):
                  defaultExtensions = None,
                  addExtensions = None,
                  removeExtensions = None,
+                 emitExtensions = None,
                  sortProcedure = regSortFeatures,
                  prefixText = "",
                  genFuncPointers = True,
                  protectFile = True,
                  protectFeature = True,
-                 protectProto = None,
-                 protectProtoStr = None,
                  apicall = '',
                  apientry = '',
                  apientryp = '',
                  alignFuncParam = 0,
                  library_name = '',
+                 expandEnumerants = True,
                  helper_file_type = ''):
         GeneratorOptions.__init__(self, filename, directory, apiname, profile,
                                   versions, emitversions, defaultExtensions,
-                                  addExtensions, removeExtensions, sortProcedure)
+                                  addExtensions, removeExtensions, emitExtensions, sortProcedure)
         self.prefixText       = prefixText
         self.genFuncPointers  = genFuncPointers
         self.protectFile      = protectFile
         self.protectFeature   = protectFeature
-        self.protectProto     = protectProto
-        self.protectProtoStr  = protectProtoStr
         self.apicall          = apicall
         self.apientry         = apientry
         self.apientryp        = apientryp
@@ -77,13 +77,12 @@ class HelperFileOutputGenerator(OutputGenerator):
         OutputGenerator.__init__(self, errFile, warnFile, diagFile)
         # Internal state - accumulators for different inner block text
         self.enum_output = ''                             # string built up of enum string routines
-        self.struct_size_h_output = ''                    # string built up of struct size header output
-        self.struct_size_c_output = ''                    # string built up of struct size source output
         # Internal state - accumulators for different inner block text
         self.structNames = []                             # List of Vulkan struct typenames
         self.structTypes = dict()                         # Map of Vulkan struct typename to required VkStructureType
         self.structMembers = []                           # List of StructMemberData records for all Vulkan structs
         self.object_types = []                            # List of all handle types
+        self.object_type_aliases = []                     # Aliases to handles types (for handles that were extensions)
         self.debug_report_object_types = []               # Handy copy of debug_report_object_type enum data
         self.core_object_types = []                       # Handy copy of core_object_type enum data
         self.device_extension_info = dict()               # Dict of device extension name defines and ifdef values
@@ -159,16 +158,26 @@ class HelperFileOutputGenerator(OutputGenerator):
     def beginFeature(self, interface, emit):
         # Start processing in superclass
         OutputGenerator.beginFeature(self, interface, emit)
-        if self.featureName == 'VK_VERSION_1_0':
+        self.featureExtraProtect = GetFeatureProtect(interface)
+
+        if self.featureName == 'VK_VERSION_1_0' or self.featureName == 'VK_VERSION_1_1':
             return
+        name = self.featureName
         nameElem = interface[0][1]
-        name = nameElem.get('name')
-        if 'EXTENSION_NAME' not in name:
+        name_define = nameElem.get('name')
+        if 'EXTENSION_NAME' not in name_define:
             print("Error in vk.xml file -- extension name is not available")
-        if interface.get('type') == 'instance':
-            self.instance_extension_info[name] = self.featureExtraProtect
+        requires = interface.get('requires')
+        if requires is not None:
+            required_extensions = requires.split(',')
         else:
-            self.device_extension_info[name] = self.featureExtraProtect
+            required_extensions = list()
+        info = { 'define': name_define, 'ifdef':self.featureExtraProtect, 'reqs':required_extensions }
+        if interface.get('type') == 'instance':
+            self.instance_extension_info[name] = info
+        else:
+            self.device_extension_info[name] = info
+
     #
     # Override parent class to be notified of the end of an extension
     def endFeature(self):
@@ -176,18 +185,16 @@ class HelperFileOutputGenerator(OutputGenerator):
         OutputGenerator.endFeature(self)
     #
     # Grab group (e.g. C "enum" type) info to output for enum-string conversion helper
-    def genGroup(self, groupinfo, groupName):
-        OutputGenerator.genGroup(self, groupinfo, groupName)
+    def genGroup(self, groupinfo, groupName, alias):
+        OutputGenerator.genGroup(self, groupinfo, groupName, alias)
         groupElem = groupinfo.elem
         # For enum_string_header
         if self.helper_file_type == 'enum_string_header':
-            value_list = []
+            value_set = set()
             for elem in groupElem.findall('enum'):
-                if elem.get('supported') != 'disabled':
-                    item_name = elem.get('name')
-                    value_list.append(item_name)
-            if value_list is not None:
-                self.enum_output += self.GenerateEnumStringConversion(groupName, value_list)
+                if elem.get('supported') != 'disabled' and elem.get('alias') == None:
+                    value_set.add(elem.get('name'))
+            self.enum_output += self.GenerateEnumStringConversion(groupName, value_set)
         elif self.helper_file_type == 'object_types_header':
             if groupName == 'VkDebugReportObjectTypeEXT':
                 for elem in groupElem.findall('enum'):
@@ -202,26 +209,20 @@ class HelperFileOutputGenerator(OutputGenerator):
 
     #
     # Called for each type -- if the type is a struct/union, grab the metadata
-    def genType(self, typeinfo, name):
-        OutputGenerator.genType(self, typeinfo, name)
+    def genType(self, typeinfo, name, alias):
+        OutputGenerator.genType(self, typeinfo, name, alias)
         typeElem = typeinfo.elem
         # If the type is a struct type, traverse the imbedded <member> tags generating a structure.
         # Otherwise, emit the tag text.
         category = typeElem.get('category')
         if category == 'handle':
-            self.object_types.append(name)
+            if alias:
+                self.object_type_aliases.append((name,alias))
+            else:
+                self.object_types.append(name)
         elif (category == 'struct' or category == 'union'):
             self.structNames.append(name)
-            self.genStruct(typeinfo, name)
-    #
-    # Generate a VkStructureType based on a structure typename
-    def genVkStructureType(self, typename):
-        # Add underscore between lowercase then uppercase
-        value = re.sub('([a-z0-9])([A-Z])', r'\1_\2', typename)
-        # Change to uppercase
-        value = value.upper()
-        # Add STRUCTURE_TYPE_
-        return re.sub('VK_', 'VK_STRUCTURE_TYPE_', value)
+            self.genStruct(typeinfo, name, alias)
     #
     # Check if the parameter passed in is a pointer
     def paramIsPointer(self, param):
@@ -271,9 +272,9 @@ class HelperFileOutputGenerator(OutputGenerator):
                 decoratedName = '{}/{}'.format(*match.group(2, 3))
         else:
             # Matches expressions similar to 'latexmath : [dataSize \over 4]'
-            match = re.match(r'latexmath\s*\:\s*\[\s*(\w+)\s*\\over\s*(\d+)\s*\]', source)
-            name = match.group(1)
-            decoratedName = '{}/{}'.format(*match.group(1, 2))
+            match = re.match(r'latexmath\s*\:\s*\[\s*(\\textrm\{)?(\w+)\}?\s*\\over\s*(\d+)\s*\]', source)
+            name = match.group(2)
+            decoratedName = '{}/{}'.format(*match.group(2, 3))
         return name, decoratedName
     #
     # Retrieve the value of the len tag
@@ -295,7 +296,7 @@ class HelperFileOutputGenerator(OutputGenerator):
             result = str(result).replace('::', '->')
         return result
     #
-    # Check if a structure is or contains a dispatchable (dispatchable = True) or 
+    # Check if a structure is or contains a dispatchable (dispatchable = True) or
     # non-dispatchable (dispatchable = False) handle
     def TypeContainsObjectHandle(self, handle_type, dispatchable):
         if dispatchable:
@@ -316,8 +317,8 @@ class HelperFileOutputGenerator(OutputGenerator):
         return False
     #
     # Generate local ready-access data describing Vulkan structures and unions from the XML metadata
-    def genStruct(self, typeinfo, typeName):
-        OutputGenerator.genStruct(self, typeinfo, typeName)
+    def genStruct(self, typeinfo, typeName, alias):
+        OutputGenerator.genStruct(self, typeinfo, typeName, alias)
         members = typeinfo.elem.findall('.//member')
         # Iterate over members once to get length parameters for arrays
         lens = set()
@@ -341,10 +342,8 @@ class HelperFileOutputGenerator(OutputGenerator):
                 result = re.search(r'VK_STRUCTURE_TYPE_\w+', rawXml)
                 if result:
                     value = result.group(0)
-                else:
-                    value = self.genVkStructureType(typeName)
-                # Store the required type value
-                self.structTypes[typeName] = self.StructType(name=name, value=value)
+                    # Store the required type value
+                    self.structTypes[typeName] = self.StructType(name=name, value=value)
             # Store pointer/array/string info
             isstaticarray = self.paramIsStaticArray(member)
             membersInfo.append(self.CommandParam(type=type,
@@ -365,7 +364,9 @@ class HelperFileOutputGenerator(OutputGenerator):
         outstring += '{\n'
         outstring += '    switch ((%s)input_value)\n' % groupName
         outstring += '    {\n'
-        for item in value_list:
+        # Emit these in a repeatable order so file is generated with the same contents each time.
+        # This helps compiler caching systems like ccache.
+        for item in sorted(value_list):
             outstring += '        case %s:\n' % item
             outstring += '            return "%s";\n' % item
         outstring += '        default:\n'
@@ -382,7 +383,7 @@ class HelperFileOutputGenerator(OutputGenerator):
                 pdev_members = members
                 break
         deindex = '\n'
-        deindex += 'static const char * GetPhysDevFeatureString(uint32_t index) {\n'
+        deindex += 'static inline const char * GetPhysDevFeatureString(uint32_t index) {\n'
         deindex += '    const char * IndexToPhysDevFeatureString[] = {\n'
         for feature in pdev_members:
             deindex += '        "%s",\n' % feature.name
@@ -405,158 +406,12 @@ class HelperFileOutputGenerator(OutputGenerator):
             enum_string_helper_header += self.DeIndexPhysDevFeatures()
             return enum_string_helper_header
     #
-    # struct_size_header: build function prototypes for header file
-    def GenerateStructSizeHeader(self):
-        outstring = ''
-        outstring += 'size_t get_struct_chain_size(const void* struct_ptr);\n'
-        outstring += 'size_t get_struct_size(const void* struct_ptr);\n'
-        for item in self.structMembers:
-            lower_case_name = item.name.lower()
-            if item.ifdef_protect != None:
-                outstring += '#ifdef %s\n' % item.ifdef_protect
-            outstring += 'size_t vk_size_%s(const %s* struct_ptr);\n' % (item.name.lower(), item.name)
-            if item.ifdef_protect != None:
-                outstring += '#endif // %s\n' % item.ifdef_protect
-        outstring += '#ifdef __cplusplus\n'
-        outstring += '}\n'
-        outstring += '#endif'
-        return outstring
-    #
-    # Combine struct size helper header file preamble with body text and return
-    def GenerateStructSizeHelperHeader(self):
-        struct_size_helper_header = '\n'
-        struct_size_helper_header += '#ifdef __cplusplus\n'
-        struct_size_helper_header += 'extern "C" {\n'
-        struct_size_helper_header += '#endif\n'
-        struct_size_helper_header += '\n'
-        struct_size_helper_header += '#include <stdio.h>\n'
-        struct_size_helper_header += '#include <stdlib.h>\n'
-        struct_size_helper_header += '#include <vulkan/vulkan.h>\n'
-        struct_size_helper_header += '\n'
-        struct_size_helper_header += '// Function Prototypes\n'
-        struct_size_helper_header += self.GenerateStructSizeHeader()
-        return struct_size_helper_header
-    #
     # Helper function for declaring a counter variable only once
     def DeclareCounter(self, string_var, declare_flag):
         if declare_flag == False:
             string_var += '        uint32_t i = 0;\n'
             declare_flag = True
         return string_var, declare_flag
-    #
-    # Build the header of the get_struct_chain_size function
-    def GenerateChainSizePreamble(self):
-        preamble = '\nsize_t get_struct_chain_size(const void* struct_ptr) {\n'
-        preamble += '    // Use VkApplicationInfo as struct until actual type is resolved\n'
-        preamble += '    VkApplicationInfo* pNext = (VkApplicationInfo*)struct_ptr;\n'
-        preamble += '    size_t struct_size = 0;\n'
-        preamble += '    while (pNext) {\n'
-        preamble += '        switch (pNext->sType) {\n'
-        return preamble
-    #
-    # Build the footer of the get_struct_chain_size function
-    def GenerateChainSizePostamble(self):
-        postamble  = '            default:\n'
-        postamble += '                struct_size += 0;\n'
-        postamble += '                break;'
-        postamble += '        }\n'
-        postamble += '        pNext = (VkApplicationInfo*)pNext->pNext;\n'
-        postamble += '    }\n'
-        postamble += '    return struct_size;\n'
-        postamble += '}\n'
-        return postamble
-    #
-    # Build the header of the get_struct_size function
-    def GenerateStructSizePreamble(self):
-        preamble = '\nsize_t get_struct_size(const void* struct_ptr) {\n'
-        preamble += '    switch (((VkApplicationInfo*)struct_ptr)->sType) {\n'
-        return preamble
-    #
-    # Build the footer of the get_struct_size function
-    def GenerateStructSizePostamble(self):
-        postamble  = '    default:\n'
-        postamble += '        return(0);\n'
-        postamble += '    }\n'
-        postamble += '}'
-        return postamble
-    #
-    # struct_size_helper source -- create bodies of struct size helper functions
-    def GenerateStructSizeSource(self):
-        # Construct the bodies of the struct size functions, get_struct_chain_size(),
-        # and get_struct_size() simultaneously
-        struct_size_funcs = ''
-        chain_size  = self.GenerateChainSizePreamble()
-        struct_size  = self.GenerateStructSizePreamble()
-        for item in self.structMembers:
-            struct_size_funcs += '\n'
-            lower_case_name = item.name.lower()
-            if item.ifdef_protect != None:
-                struct_size_funcs += '#ifdef %s\n' % item.ifdef_protect
-                struct_size += '#ifdef %s\n' % item.ifdef_protect
-                chain_size += '#ifdef %s\n' % item.ifdef_protect
-            if item.name in self.structTypes:
-                chain_size += '            case %s: {\n' % self.structTypes[item.name].value
-                chain_size += '                struct_size += vk_size_%s((%s*)pNext);\n' % (item.name.lower(), item.name)
-                chain_size += '                break;\n'
-                chain_size += '            }\n'
-                struct_size += '    case %s: \n' % self.structTypes[item.name].value
-                struct_size += '        return vk_size_%s((%s*)struct_ptr);\n' % (item.name.lower(), item.name)
-            struct_size_funcs += 'size_t vk_size_%s(const %s* struct_ptr) { \n' % (item.name.lower(), item.name)
-            struct_size_funcs += '    size_t struct_size = 0;\n'
-            struct_size_funcs += '    if (struct_ptr) {\n'
-            struct_size_funcs += '        struct_size = sizeof(%s);\n' % item.name
-            counter_declared = False
-            for member in item.members:
-                vulkan_type = next((i for i, v in enumerate(self.structMembers) if v[0] == member.type), None)
-                if member.ispointer == True:
-                    if vulkan_type is not None:
-                        # If this is another Vulkan structure call generated size function
-                        if member.len is not None:
-                            struct_size_funcs, counter_declared = self.DeclareCounter(struct_size_funcs, counter_declared)
-                            struct_size_funcs += '        for (i = 0; i < struct_ptr->%s; i++) {\n' % member.len
-                            struct_size_funcs += '            struct_size += vk_size_%s(&struct_ptr->%s[i]);\n' % (member.type.lower(), member.name)
-                            struct_size_funcs += '        }\n'
-                        else:
-                            struct_size_funcs += '        struct_size += vk_size_%s(struct_ptr->%s);\n' % (member.type.lower(), member.name)
-                    else:
-                        if member.type == 'char':
-                            # Deal with sizes of character strings
-                            if member.len is not None:
-                                struct_size_funcs, counter_declared = self.DeclareCounter(struct_size_funcs, counter_declared)
-                                struct_size_funcs += '        for (i = 0; i < struct_ptr->%s; i++) {\n' % member.len
-                                struct_size_funcs += '            struct_size += (sizeof(char*) + (sizeof(char) * (1 + strlen(struct_ptr->%s[i]))));\n' % (member.name)
-                                struct_size_funcs += '        }\n'
-                            else:
-                                struct_size_funcs += '        struct_size += (struct_ptr->%s != NULL) ? sizeof(char)*(1+strlen(struct_ptr->%s)) : 0;\n' % (member.name, member.name)
-                        else:
-                            if member.len is not None:
-                                # Avoid using 'sizeof(void)', which generates compile-time warnings/errors
-                                checked_type = member.type
-                                if checked_type == 'void':
-                                    checked_type = 'void*'
-                                struct_size_funcs += '        struct_size += (struct_ptr->%s ) * sizeof(%s);\n' % (member.len, checked_type)
-            struct_size_funcs += '    }\n'
-            struct_size_funcs += '    return struct_size;\n'
-            struct_size_funcs += '}\n'
-            if item.ifdef_protect != None:
-                struct_size_funcs += '#endif // %s\n' % item.ifdef_protect
-                struct_size += '#endif // %s\n' % item.ifdef_protect
-                chain_size += '#endif // %s\n' % item.ifdef_protect
-        chain_size += self.GenerateChainSizePostamble()
-        struct_size += self.GenerateStructSizePostamble()
-        return_value = struct_size_funcs + chain_size + struct_size;
-        return return_value
-    #
-    # Combine struct size helper source file preamble with body text and return
-    def GenerateStructSizeHelperSource(self):
-        struct_size_helper_source = '\n'
-        struct_size_helper_source += '#include "vk_struct_size_helper.h"\n'
-        struct_size_helper_source += '#include <string.h>\n'
-        struct_size_helper_source += '#include <assert.h>\n'
-        struct_size_helper_source += '\n'
-        struct_size_helper_source += '// Function Definitions\n'
-        struct_size_helper_source += self.GenerateStructSizeSource()
-        return struct_size_helper_source
     #
     # Combine safe struct helper header file preamble with body text and return
     def GenerateSafeStructHelperHeader(self):
@@ -605,74 +460,192 @@ class HelperFileOutputGenerator(OutputGenerator):
     #
     # Generate extension helper header file
     def GenerateExtensionHelperHeader(self):
-        extension_helper_header = '\n'
-        extension_helper_header += '#ifndef VK_EXTENSION_HELPER_H_\n'
-        extension_helper_header += '#define VK_EXTENSION_HELPER_H_\n'
-        struct  = '\n'
-        extension_helper_header += '#include <vulkan/vulkan.h>\n'
-        extension_helper_header += '#include <string.h>\n'
-        extension_helper_header += '#include <utility>\n'
-        extension_helper_header += '\n'
-        extension_dict = dict()
+
+        V_1_0_instance_extensions_promoted_to_core = [
+            'vk_khr_device_group_creation',
+            'vk_khr_external_fence_capabilities',
+            'vk_khr_external_memory_capabilities',
+            'vk_khr_external_semaphore_capabilities',
+            'vk_khr_get_physical_device_properties_2',
+            ]
+
+        V_1_0_device_extensions_promoted_to_core = [
+            'vk_khr_16bit_storage',
+            'vk_khr_bind_memory_2',
+            'vk_khr_dedicated_allocation',
+            'vk_khr_descriptor_update_template',
+            'vk_khr_device_group',
+            'vk_khr_external_fence',
+            'vk_khr_external_memory',
+            'vk_khr_external_semaphore',
+            'vk_khr_get_memory_requirements_2',
+            'vk_khr_maintenance1',
+            'vk_khr_maintenance2',
+            'vk_khr_maintenance3',
+            'vk_khr_multiview',
+            'vk_khr_relaxed_block_layout',
+            'vk_khr_sampler_ycbcr_conversion',
+            'vk_khr_shader_draw_parameters',
+            'vk_khr_storage_buffer_storage_class',
+            'vk_khr_variable_pointers',
+            ]
+
+        output = [
+            '',
+            '#ifndef VK_EXTENSION_HELPER_H_',
+            '#define VK_EXTENSION_HELPER_H_',
+            '#include <unordered_set>',
+            '#include <string>',
+            '#include <unordered_map>',
+            '#include <utility>',
+            '#include <set>',
+            '',
+            '#include <vulkan/vulkan.h>',
+            '']
+
+        def guarded(ifdef, value):
+            if ifdef is not None:
+                return '\n'.join([ '#ifdef %s' % ifdef, value, '#endif' ])
+            else:
+                return value
+
         for type in ['Instance', 'Device']:
+            struct_type = '%sExtensions' % type
             if type == 'Instance':
                 extension_dict = self.instance_extension_info
-                struct += 'struct InstanceExtensions { \n'
+                promoted_ext_list = V_1_0_instance_extensions_promoted_to_core
+                struct_decl = 'struct %s {' % struct_type
+                instance_struct_type = struct_type
             else:
                 extension_dict = self.device_extension_info
-                struct += 'struct DeviceExtensions : public InstanceExtensions { \n'
-            for ext_name, ifdef in extension_dict.items():
-                bool_name = ext_name.lower()
-                bool_name = re.sub('_extension_name', '', bool_name)
-                struct += '    bool %s{false};\n' % bool_name
-            struct += '\n'
+                promoted_ext_list = V_1_0_device_extensions_promoted_to_core
+                struct_decl = 'struct %s : public %s {' % (struct_type, instance_struct_type)
+
+            extension_items = sorted(extension_dict.items())
+
+            field_name = { ext_name: re.sub('_extension_name', '', info['define'].lower()) for ext_name, info in extension_items }
             if type == 'Instance':
-                struct += '    void InitFromInstanceCreateInfo(const VkInstanceCreateInfo *pCreateInfo) {\n'
+                instance_field_name = field_name
+                instance_extension_dict = extension_dict
             else:
-                struct += '    void InitFromDeviceCreateInfo(const InstanceExtensions *instance_extensions, const VkDeviceCreateInfo *pCreateInfo) {\n'
-            struct += '\n'
-            struct += '        static const std::pair<char const *, bool %sExtensions::*> known_extensions[]{\n' % type
-            for ext_name, ifdef in extension_dict.items():
-                if ifdef is not None:
-                    struct += '#ifdef %s\n' % ifdef
-                bool_name = ext_name.lower()
-                bool_name = re.sub('_extension_name', '', bool_name)
-                struct += '            {%s, &%sExtensions::%s},\n' % (ext_name, type, bool_name)
-                if ifdef is not None:
-                    struct += '#endif\n'
-            struct += '        };\n'
-            struct += '\n'
-            struct += '        // Initialize struct data\n'
-            for ext_name, ifdef in self.instance_extension_info.items():
-                bool_name = ext_name.lower()
-                bool_name = re.sub('_extension_name', '', bool_name)
-                if type == 'Device':
-                    struct += '        %s = instance_extensions->%s;\n' % (bool_name, bool_name)
-            struct += '\n'
-            struct += '        for (uint32_t i = 0; i < pCreateInfo->enabledExtensionCount; i++) {\n'
-            struct += '            for (auto ext : known_extensions) {\n'
-            struct += '                if (!strcmp(ext.first, pCreateInfo->ppEnabledExtensionNames[i])) {\n'
-            struct += '                    this->*(ext.second) = true;\n'
-            struct += '                    break;\n'
-            struct += '                }\n'
-            struct += '            }\n'
-            struct += '        }\n'
-            struct += '    }\n'
-            struct += '};\n'
-            struct += '\n'
+                # Get complete field name and extension data for both Instance and Device extensions
+                field_name.update(instance_field_name)
+                extension_dict = extension_dict.copy()  # Don't modify the self.<dict> we're pointing to
+                extension_dict.update(instance_extension_dict)
+
+            # Output the data member list
+            struct  = [struct_decl]
+            struct.extend([ '    bool %s{false};' % field_name[ext_name] for ext_name, info in extension_items])
+
+            # Create struct entries for saving extension count and extension list from DeviceCreateInfo
+            struct.extend([
+                '',
+                '    std::unordered_set<std::string> device_extension_set;'])
+
+            # Construct the extension information map -- mapping name to data member (field), and required extensions
+            # The map is contained within a static function member for portability reasons.
+            info_type = '%sInfo' % type
+            info_map_type = '%sMap' % info_type
+            req_type = '%sReq' % type
+            req_vec_type = '%sVec' % req_type
+            struct.extend([
+                '',
+                '    struct %s {' % req_type,
+                '        const bool %s::* enabled;' % struct_type,
+                '        const char *name;',
+                '    };',
+                '    typedef std::vector<%s> %s;' % (req_type, req_vec_type),
+                '    struct %s {' % info_type,
+                '       %s(bool %s::* state_, const %s requires_): state(state_), requires(requires_) {}' % ( info_type, struct_type, req_vec_type),
+                '       bool %s::* state;' % struct_type,
+                '       %s requires;' % req_vec_type,
+                '    };',
+                '',
+                '    typedef std::unordered_map<std::string,%s> %s;' % (info_type, info_map_type),
+                '    static const %s &get_info(const char *name) {' %info_type,
+                '        static const %s info_map = {' % info_map_type ])
+
+            field_format = '&' + struct_type + '::%s'
+            req_format = '{' + field_format+ ', %s}'
+            req_indent = '\n                           '
+            req_join = ',' + req_indent
+            info_format = ('            std::make_pair(%s, ' + info_type + '(' + field_format + ', {%s})),')
+            def format_info(ext_name, info):
+                reqs = req_join.join([req_format % (field_name[req], extension_dict[req]['define']) for req in info['reqs']])
+                return info_format % (info['define'], field_name[ext_name], '{%s}' % (req_indent + reqs) if reqs else '')
+
+            struct.extend([guarded(info['ifdef'], format_info(ext_name, info)) for ext_name, info in extension_items])
+            struct.extend([
+                '        };',
+                '',
+                '        static const %s empty_info {nullptr, %s()};' % (info_type, req_vec_type),
+                '        %s::const_iterator info = info_map.find(name);' % info_map_type,
+                '        if ( info != info_map.cend()) {',
+                '            return info->second;',
+                '        }',
+                '        return empty_info;',
+                '    }',
+                ''])
+
+            if type == 'Instance':
+                struct.extend([
+                    '    uint32_t NormalizeApiVersion(uint32_t specified_version) {',
+                    '        uint32_t api_version = (specified_version < VK_API_VERSION_1_1) ? VK_API_VERSION_1_0 : VK_API_VERSION_1_1;',
+                    '        return api_version;',
+                    '    }',
+                    '',
+                    '    uint32_t InitFromInstanceCreateInfo(uint32_t requested_api_version, const VkInstanceCreateInfo *pCreateInfo) {'])
+            else:
+                struct.extend([
+                    '    %s() = default;' % struct_type,
+                    '    %s(const %s& instance_ext) : %s(instance_ext) {}' % (struct_type, instance_struct_type, instance_struct_type),
+                    '',
+                    '    uint32_t InitFromDeviceCreateInfo(const %s *instance_extensions, uint32_t requested_api_version,' % instance_struct_type,
+                    '                                      const VkDeviceCreateInfo *pCreateInfo) {',
+                    '        // Initialize: this to defaults,  base class fields to input.',
+                    '        assert(instance_extensions);',
+                    '        *this = %s(*instance_extensions);' % struct_type,
+                    '',
+                    '        // Save pCreateInfo device extension list',
+                    '        for (uint32_t extn = 0; extn < pCreateInfo->enabledExtensionCount; extn++) {',
+                    '           device_extension_set.insert(pCreateInfo->ppEnabledExtensionNames[extn]);',
+                    '        }']),
+
+            struct.extend([
+                '',
+                '        static const std::vector<const char *> V_1_0_promoted_%s_extensions = {' % type.lower() ])
+            struct.extend(['            %s_EXTENSION_NAME,' % ext_name.upper() for ext_name in promoted_ext_list])
+            struct.extend([
+                '        };',
+                '',
+                '        // Initialize struct data, robust to invalid pCreateInfo',
+                '        if (pCreateInfo->ppEnabledExtensionNames) {',
+                '            for (uint32_t i = 0; i < pCreateInfo->enabledExtensionCount; i++) {',
+                '                if (!pCreateInfo->ppEnabledExtensionNames[i]) continue;',
+                '                auto info = get_info(pCreateInfo->ppEnabledExtensionNames[i]);',
+                '                if(info.state) this->*(info.state) = true;',
+                '            }',
+                '        }',
+                '        uint32_t api_version = NormalizeApiVersion(requested_api_version);',
+                '        if (api_version >= VK_API_VERSION_1_1) {',
+                '            for (auto promoted_ext : V_1_0_promoted_%s_extensions) {' % type.lower(),
+                '                auto info = get_info(promoted_ext);',
+                '                assert(info.state);',
+                '                if (info.state) this->*(info.state) = true;',
+                '            }',
+                '        }',
+                '        return api_version;',
+                '    }',
+                '};'])
+
             # Output reference lists of instance/device extension names
-            struct += 'static const char * const k%sExtensionNames = \n' % type
-            for ext_name, ifdef in extension_dict.items():
-                if ifdef is not None:
-                    struct += '#ifdef %s\n' % ifdef
-                struct += '    %s\n' % ext_name
-                if ifdef is not None:
-                    struct += '#endif\n'
-            struct += ';\n\n'
-        extension_helper_header += struct
-        extension_helper_header += '\n'
-        extension_helper_header += '#endif // VK_EXTENSION_HELPER_H_\n'
-        return extension_helper_header
+            struct.extend(['', 'static const std::set<std::string> k%sExtensionNames = {' % type])
+            struct.extend([guarded(info['ifdef'], '    %s,' % info['define']) for ext_name, info in extension_items])
+            struct.extend(['};', ''])
+            output.extend(struct)
+
+        output.extend(['', '#endif // VK_EXTENSION_HELPER_H_'])
+        return '\n'.join(output)
     #
     # Combine object types helper header file preamble with body text and return
     def GenerateObjectTypesHelperHeader(self):
@@ -685,21 +658,28 @@ class HelperFileOutputGenerator(OutputGenerator):
     #
     # Object types header: create object enum type header file
     def GenerateObjectTypesHeader(self):
-        object_types_header = '// Object Type enum for validation layer internal object handling\n'
+        object_types_header = ''
+        object_types_header += '// Object Type enum for validation layer internal object handling\n'
         object_types_header += 'typedef enum VulkanObjectType {\n'
         object_types_header += '    kVulkanObjectTypeUnknown = 0,\n'
         enum_num = 1
         type_list = [];
+        enum_entry_map = {}
 
         # Output enum definition as each handle is processed, saving the names to use for the conversion routine
         for item in self.object_types:
             fixup_name = item[2:]
             enum_entry = 'kVulkanObjectType%s' % fixup_name
+            enum_entry_map[item] = enum_entry
             object_types_header += '    ' + enum_entry
             object_types_header += ' = %d,\n' % enum_num
             enum_num += 1
             type_list.append(enum_entry)
         object_types_header += '    kVulkanObjectTypeMax = %d,\n' % enum_num
+        object_types_header += '    // Aliases for backwards compatibilty of "promoted" types\n'
+        for (name, alias) in self.object_type_aliases:
+            fixup_name = name[2:]
+            object_types_header += '    kVulkanObjectType{} = {},\n'.format(fixup_name, enum_entry_map[alias])
         object_types_header += '} VulkanObjectType;\n\n'
 
         # Output name string helper
@@ -711,37 +691,79 @@ class HelperFileOutputGenerator(OutputGenerator):
             object_types_header += '    "%s",\n' % fixup_name
         object_types_header += '};\n'
 
+        # Key creation helper for map comprehensions that convert between k<Name> and VK<Name> symbols
+        def to_key(regex, raw_key): return re.search(regex, raw_key).group(1).lower().replace("_","")
+
         # Output a conversion routine from the layer object definitions to the debug report definitions
+        # As the VK_DEBUG_REPORT types are not being updated, specify UNKNOWN for unmatched types
         object_types_header += '\n'
         object_types_header += '// Helper array to get Vulkan VK_EXT_debug_report object type enum from the internal layers version\n'
         object_types_header += 'const VkDebugReportObjectTypeEXT get_debug_report_enum[] = {\n'
-        object_types_header += '    VK_DEBUG_REPORT_OBJECT_TYPE_UNKNOWN_EXT, // No Match\n'
+        object_types_header += '    VK_DEBUG_REPORT_OBJECT_TYPE_UNKNOWN_EXT, // kVulkanObjectTypeUnknown\n'
+
+        dbg_re = '^VK_DEBUG_REPORT_OBJECT_TYPE_(.*)_EXT$'
+        dbg_map = {to_key(dbg_re, dbg) : dbg for dbg in self.debug_report_object_types}
+        dbg_default = 'VK_DEBUG_REPORT_OBJECT_TYPE_UNKNOWN_EXT'
         for object_type in type_list:
-            search_type = object_type.replace("kVulkanObjectType", "").lower()
-            for vk_object_type in self.debug_report_object_types:
-                target_type = vk_object_type.replace("VK_DEBUG_REPORT_OBJECT_TYPE_", "").lower()
-                target_type = target_type[:-4]
-                target_type = target_type.replace("_", "")
-                if search_type == target_type:
-                    object_types_header += '    %s,   // %s\n' % (vk_object_type, object_type)
-                    break
+            vk_object_type = dbg_map.get(object_type.replace("kVulkanObjectType", "").lower(), dbg_default)
+            object_types_header += '    %s,   // %s\n' % (vk_object_type, object_type)
         object_types_header += '};\n'
 
         # Output a conversion routine from the layer object definitions to the core object type definitions
+        # This will intentionally *fail* for unmatched types as the VK_OBJECT_TYPE list should match the kVulkanObjectType list
         object_types_header += '\n'
         object_types_header += '// Helper array to get Official Vulkan VkObjectType enum from the internal layers version\n'
         object_types_header += 'const VkObjectType get_object_type_enum[] = {\n'
-        object_types_header += '    VK_OBJECT_TYPE_UNKNOWN, // No Match\n'
+        object_types_header += '    VK_OBJECT_TYPE_UNKNOWN, // kVulkanObjectTypeUnknown\n'
+
+        vko_re = '^VK_OBJECT_TYPE_(.*)'
+        vko_map = {to_key(vko_re, vko) : vko for vko in self.core_object_types}
         for object_type in type_list:
-            search_type = object_type.replace("kVulkanObjectType", "").lower()
-            for vk_object_type in self.core_object_types:
-                target_type = vk_object_type.replace("VK_OBJECT_TYPE_", "").lower()
-                target_type = target_type.replace("_", "")
-                if search_type == target_type:
-                    object_types_header += '    %s,   // %s\n' % (vk_object_type, object_type)
-                    break
+            vk_object_type = vko_map[object_type.replace("kVulkanObjectType", "").lower()]
+            object_types_header += '    %s,   // %s\n' % (vk_object_type, object_type)
         object_types_header += '};\n'
 
+        # Create a function to convert from VkDebugReportObjectTypeEXT to VkObjectType
+        object_types_header += '\n'
+        object_types_header += '// Helper function to convert from VkDebugReportObjectTypeEXT to VkObjectType\n'
+        object_types_header += 'static inline VkObjectType convertDebugReportObjectToCoreObject(VkDebugReportObjectTypeEXT debug_report_obj){\n'
+        object_types_header += '    if (debug_report_obj == VK_DEBUG_REPORT_OBJECT_TYPE_UNKNOWN_EXT) {\n'
+        object_types_header += '        return VK_OBJECT_TYPE_UNKNOWN;\n'
+        for core_object_type in self.core_object_types:
+            core_target_type = core_object_type.replace("VK_OBJECT_TYPE_", "").lower()
+            core_target_type = core_target_type.replace("_", "")
+            for dr_object_type in self.debug_report_object_types:
+                dr_target_type = dr_object_type.replace("VK_DEBUG_REPORT_OBJECT_TYPE_", "").lower()
+                dr_target_type = dr_target_type[:-4]
+                dr_target_type = dr_target_type.replace("_", "")
+                if core_target_type == dr_target_type:
+                    object_types_header += '    } else if (debug_report_obj == %s) {\n' % dr_object_type
+                    object_types_header += '        return %s;\n' % core_object_type
+                    break
+        object_types_header += '    }\n'
+        object_types_header += '    return VK_OBJECT_TYPE_UNKNOWN;\n'
+        object_types_header += '}\n'
+
+        # Create a function to convert from VkObjectType to VkDebugReportObjectTypeEXT
+        object_types_header += '\n'
+        object_types_header += '// Helper function to convert from VkDebugReportObjectTypeEXT to VkObjectType\n'
+        object_types_header += 'static inline VkDebugReportObjectTypeEXT convertCoreObjectToDebugReportObject(VkObjectType core_report_obj){\n'
+        object_types_header += '    if (core_report_obj == VK_OBJECT_TYPE_UNKNOWN) {\n'
+        object_types_header += '        return VK_DEBUG_REPORT_OBJECT_TYPE_UNKNOWN_EXT;\n'
+        for core_object_type in self.core_object_types:
+            core_target_type = core_object_type.replace("VK_OBJECT_TYPE_", "").lower()
+            core_target_type = core_target_type.replace("_", "")
+            for dr_object_type in self.debug_report_object_types:
+                dr_target_type = dr_object_type.replace("VK_DEBUG_REPORT_OBJECT_TYPE_", "").lower()
+                dr_target_type = dr_target_type[:-4]
+                dr_target_type = dr_target_type.replace("_", "")
+                if core_target_type == dr_target_type:
+                    object_types_header += '    } else if (core_report_obj == %s) {\n' % core_object_type
+                    object_types_header += '        return %s;\n' % dr_object_type
+                    break
+        object_types_header += '    }\n'
+        object_types_header += '    return VK_DEBUG_REPORT_OBJECT_TYPE_UNKNOWN_EXT;\n'
+        object_types_header += '}\n'
         return object_types_header
     #
     # Determine if a structure needs a safe_struct helper function
@@ -769,10 +791,15 @@ class HelperFileOutputGenerator(OutputGenerator):
         wsi_structs = ['VkXlibSurfaceCreateInfoKHR',
                        'VkXcbSurfaceCreateInfoKHR',
                        'VkWaylandSurfaceCreateInfoKHR',
-                       'VkMirSurfaceCreateInfoKHR',
                        'VkAndroidSurfaceCreateInfoKHR',
                        'VkWin32SurfaceCreateInfoKHR'
                        ]
+
+        # For abstract types just want to save the pointer away
+        # since we cannot make a copy.
+        abstract_types = ['AHardwareBuffer',
+                          'ANativeWindow',
+                         ]
         for item in self.structMembers:
             if self.NeedSafeStruct(item) == False:
                 continue
@@ -1004,21 +1031,24 @@ class HelperFileOutputGenerator(OutputGenerator):
                     else:
                         default_init_list += '\n    %s(nullptr),' % (member.name)
                         init_list += '\n    %s(nullptr),' % (member.name)
-                        init_func_txt += '    %s = nullptr;\n' % (member.name)
-                        if 'pNext' != member.name and 'void' not in m_type:
-                            if not member.isstaticarray and (member.len is None or '/' in member.len):
-                                construct_txt += '    if (in_struct->%s) {\n' % member.name
-                                construct_txt += '        %s = new %s(*in_struct->%s);\n' % (member.name, m_type, member.name)
-                                construct_txt += '    }\n'
-                                destruct_txt += '    if (%s)\n' % member.name
-                                destruct_txt += '        delete %s;\n' % member.name
-                            else:
-                                construct_txt += '    if (in_struct->%s) {\n' % member.name
-                                construct_txt += '        %s = new %s[in_struct->%s];\n' % (member.name, m_type, member.len)
-                                construct_txt += '        memcpy ((void *)%s, (void *)in_struct->%s, sizeof(%s)*in_struct->%s);\n' % (member.name, member.name, m_type, member.len)
-                                construct_txt += '    }\n'
-                                destruct_txt += '    if (%s)\n' % member.name
-                                destruct_txt += '        delete[] %s;\n' % member.name
+                        if m_type in abstract_types:
+                            construct_txt += '    %s = in_struct->%s;\n' % (member.name, member.name)
+                        else:
+                            init_func_txt += '    %s = nullptr;\n' % (member.name)
+                            if 'pNext' != member.name and 'void' not in m_type:
+                                if not member.isstaticarray and (member.len is None or '/' in member.len):
+                                    construct_txt += '    if (in_struct->%s) {\n' % member.name
+                                    construct_txt += '        %s = new %s(*in_struct->%s);\n' % (member.name, m_type, member.name)
+                                    construct_txt += '    }\n'
+                                    destruct_txt += '    if (%s)\n' % member.name
+                                    destruct_txt += '        delete %s;\n' % member.name
+                                else:
+                                    construct_txt += '    if (in_struct->%s) {\n' % member.name
+                                    construct_txt += '        %s = new %s[in_struct->%s];\n' % (member.name, m_type, member.len)
+                                    construct_txt += '        memcpy ((void *)%s, (void *)in_struct->%s, sizeof(%s)*in_struct->%s);\n' % (member.name, member.name, m_type, member.len)
+                                    construct_txt += '    }\n'
+                                    destruct_txt += '    if (%s)\n' % member.name
+                                    destruct_txt += '        delete[] %s;\n' % member.name
                 elif member.isstaticarray or member.len is not None:
                     if member.len is None:
                         # Extract length of static array by grabbing val between []
@@ -1203,10 +1233,6 @@ class HelperFileOutputGenerator(OutputGenerator):
     def OutputDestFile(self):
         if self.helper_file_type == 'enum_string_header':
             return self.GenerateEnumStringHelperHeader()
-        elif self.helper_file_type == 'struct_size_header':
-            return self.GenerateStructSizeHelperHeader()
-        elif self.helper_file_type == 'struct_size_source':
-            return self.GenerateStructSizeHelperSource()
         elif self.helper_file_type == 'safe_struct_header':
             return self.GenerateSafeStructHelperHeader()
         elif self.helper_file_type == 'safe_struct_source':
@@ -1219,4 +1245,3 @@ class HelperFileOutputGenerator(OutputGenerator):
             return self.GenerateTypeMapHelperHeader()
         else:
             return 'Bad Helper File Generator Option %s' % self.helper_file_type
-

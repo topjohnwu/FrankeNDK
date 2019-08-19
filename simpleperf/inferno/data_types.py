@@ -15,14 +15,14 @@
 #
 
 
-class CallSite:
+class CallSite(object):
 
     def __init__(self, method, dso):
         self.method = method
         self.dso = dso
 
 
-class Thread:
+class Thread(object):
 
     def __init__(self, tid, pid):
         self.tid = tid
@@ -48,7 +48,7 @@ class Thread:
         self.flamegraph.add_callchain(chain, sample.period)
 
 
-class Process:
+class Process(object):
 
     def __init__(self, name, pid):
         self.name = name
@@ -77,7 +77,7 @@ class Process:
         self.num_events += sample.period
 
 
-class FlameGraphCallSite:
+class FlameGraphCallSite(object):
 
     callsite_counter = 0
     @classmethod
@@ -85,7 +85,7 @@ class FlameGraphCallSite:
         cls.callsite_counter += 1
         return cls.callsite_counter
 
-    def __init__(self, method, dso, id):
+    def __init__(self, method, dso, callsite_id):
         # map from (dso, method) to FlameGraphCallSite. Used to speed up add_callchain().
         self.child_dict = {}
         self.children = []
@@ -93,7 +93,7 @@ class FlameGraphCallSite:
         self.dso = dso
         self.num_events = 0
         self.offset = 0  # Offset allows position nodes in different branches.
-        self.id = id
+        self.id = callsite_id
 
     def weight(self):
         return float(self.num_events)
@@ -102,15 +102,15 @@ class FlameGraphCallSite:
         self.num_events += num_events
         current = self
         for callsite in chain:
-            current = current._get_child(callsite)
+            current = current.get_child(callsite)
             current.num_events += num_events
 
-    def _get_child(self, callsite):
+    def get_child(self, callsite):
         key = (callsite.dso, callsite.method)
         child = self.child_dict.get(key)
         if child is None:
             child = self.child_dict[key] = FlameGraphCallSite(callsite.method, callsite.dso,
-                                               self._get_next_callsite_id())
+                                                              self._get_next_callsite_id())
         return child
 
     def trim_callchain(self, min_num_events):

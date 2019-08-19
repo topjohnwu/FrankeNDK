@@ -239,21 +239,17 @@ QueueCreateInfoArray::QueueCreateInfoArray(const std::vector<VkQueueFamilyProper
 Device::~Device() {
     if (!initialized()) return;
 
-    for (int i = 0; i < QUEUE_COUNT; i++) {
-        for (std::vector<Queue *>::iterator it = queues_[i].begin(); it != queues_[i].end(); it++) delete *it;
-        queues_[i].clear();
-    }
-
     vkDestroyDevice(handle(), NULL);
 }
 
-void Device::init(std::vector<const char *> &extensions, VkPhysicalDeviceFeatures *features) {
+void Device::init(std::vector<const char *> &extensions, VkPhysicalDeviceFeatures *features, VkPhysicalDeviceFeatures2 *features2) {
     // request all queues
     const std::vector<VkQueueFamilyProperties> queue_props = phy_.queue_properties();
     QueueCreateInfoArray queue_info(phy_.queue_properties());
     for (uint32_t i = 0; i < (uint32_t)queue_props.size(); i++) {
         if (queue_props[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
             graphics_queue_node_index_ = i;
+            break;
         }
     }
     // Only request creation with queuefamilies that have at least one queue
@@ -278,7 +274,11 @@ void Device::init(std::vector<const char *> &extensions, VkPhysicalDeviceFeature
     dev_info.ppEnabledExtensionNames = extensions.data();
 
     VkPhysicalDeviceFeatures all_features;
-    if (features) {
+    // Let VkPhysicalDeviceFeatures2 take priority over VkPhysicalDeviceFeatures,
+    // since it supports extensions
+    if (features2) {
+        dev_info.pNext = features2;
+    } else if (features) {
         dev_info.pEnabledFeatures = features;
     } else {
         // request all supportable features enabled
@@ -309,24 +309,30 @@ void Device::init_queues() {
 
     vkGetPhysicalDeviceQueueFamilyProperties(phy_.handle(), &queue_node_count, queue_props);
 
+    queue_families_.resize(queue_node_count);
     for (uint32_t i = 0; i < queue_node_count; i++) {
         VkQueue queue;
 
+        QueueFamilyQueues &queue_storage = queue_families_[i];
+        queue_storage.reserve(queue_props[i].queueCount);
         for (uint32_t j = 0; j < queue_props[i].queueCount; j++) {
             // TODO: Need to add support for separate MEMMGR and work queues,
             // including synchronization
             vkGetDeviceQueue(handle(), i, j, &queue);
 
+            // Store single copy of the queue object that will self destruct
+            queue_storage.emplace_back(new Queue(queue, i));
+
             if (queue_props[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
-                queues_[GRAPHICS].push_back(new Queue(queue, i));
+                queues_[GRAPHICS].push_back(queue_storage.back().get());
             }
 
             if (queue_props[i].queueFlags & VK_QUEUE_COMPUTE_BIT) {
-                queues_[COMPUTE].push_back(new Queue(queue, i));
+                queues_[COMPUTE].push_back(queue_storage.back().get());
             }
 
             if (queue_props[i].queueFlags & VK_QUEUE_TRANSFER_BIT) {
-                queues_[DMA].push_back(new Queue(queue, i));
+                queues_[DMA].push_back(queue_storage.back().get());
             }
         }
     }
@@ -334,6 +340,10 @@ void Device::init_queues() {
     delete[] queue_props;
 
     EXPECT(!queues_[GRAPHICS].empty() || !queues_[COMPUTE].empty());
+}
+const Device::QueueFamilyQueues &Device::queue_family_queues(uint32_t queue_family) const {
+    assert(queue_family < queue_families_.size());
+    return queue_families_[queue_family];
 }
 
 void Device::init_formats() {
@@ -355,7 +365,7 @@ void Device::init_formats() {
     EXPECT(!formats_.empty());
 }
 
-bool Device::IsEnbledExtension(const char *extension) {
+bool Device::IsEnabledExtension(const char *extension) {
     const auto is_x = [&extension](const char *enabled_extension) { return strcmp(extension, enabled_extension) == 0; };
     return std::any_of(enabled_extensions_.begin(), enabled_extensions_.end(), is_x);
 }
@@ -382,7 +392,7 @@ void Device::update_descriptor_sets(const std::vector<VkWriteDescriptorSet> &wri
     vkUpdateDescriptorSets(handle(), writes.size(), writes.data(), copies.size(), copies.data());
 }
 
-void Queue::submit(const std::vector<const CommandBuffer *> &cmds, Fence &fence) {
+VkResult Queue::submit(const std::vector<const CommandBuffer *> &cmds, const Fence &fence, bool expect_success) {
     const std::vector<VkCommandBuffer> cmd_handles = MakeVkHandles<VkCommandBuffer>(cmds);
     VkSubmitInfo submit_info;
     submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -395,17 +405,25 @@ void Queue::submit(const std::vector<const CommandBuffer *> &cmds, Fence &fence)
     submit_info.signalSemaphoreCount = 0;
     submit_info.pSignalSemaphores = NULL;
 
-    EXPECT(vkQueueSubmit(handle(), 1, &submit_info, fence.handle()) == VK_SUCCESS);
+    VkResult result = vkQueueSubmit(handle(), 1, &submit_info, fence.handle());
+    if (expect_success) EXPECT(result == VK_SUCCESS);
+    return result;
 }
 
-void Queue::submit(const CommandBuffer &cmd, Fence &fence) { submit(std::vector<const CommandBuffer *>(1, &cmd), fence); }
+VkResult Queue::submit(const CommandBuffer &cmd, const Fence &fence, bool expect_success) {
+    return submit(std::vector<const CommandBuffer *>(1, &cmd), fence, expect_success);
+}
 
-void Queue::submit(const CommandBuffer &cmd) {
+VkResult Queue::submit(const CommandBuffer &cmd, bool expect_success) {
     Fence fence;
-    submit(cmd, fence);
+    return submit(cmd, fence);
 }
 
-void Queue::wait() { EXPECT(vkQueueWaitIdle(handle()) == VK_SUCCESS); }
+VkResult Queue::wait() {
+    VkResult result = vkQueueWaitIdle(handle());
+    EXPECT(result == VK_SUCCESS);
+    return result;
+}
 
 DeviceMemory::~DeviceMemory() {
     if (initialized()) vkFreeMemory(device(), handle(), NULL);
@@ -449,6 +467,11 @@ VkMemoryAllocateInfo DeviceMemory::get_resource_alloc_info(const Device &dev, co
 NON_DISPATCHABLE_HANDLE_DTOR(Fence, vkDestroyFence)
 
 void Fence::init(const Device &dev, const VkFenceCreateInfo &info) { NON_DISPATCHABLE_HANDLE_INIT(vkCreateFence, dev, &info); }
+
+VkResult Fence::wait(VkBool32 wait_all, uint64_t timeout) const {
+    VkFence fence = handle();
+    return vkWaitForFences(device(), 1, &fence, wait_all, timeout);
+}
 
 NON_DISPATCHABLE_HANDLE_DTOR(Semaphore, vkDestroySemaphore)
 

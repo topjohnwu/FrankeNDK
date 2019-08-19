@@ -17,6 +17,7 @@
 #include "FuzzerValueBitMap.h"
 
 #include <set>
+#include <unordered_map>
 
 namespace fuzzer {
 
@@ -73,6 +74,11 @@ class TracePC {
   // How many bits of PC are used from __sanitizer_cov_trace_pc.
   static const size_t kTracePcBits = 18;
 
+  enum HandleUnstableOptions {
+    MinUnstable = 1,
+    ZeroUnstable = 2,
+  };
+
   void HandleInit(uint32_t *Start, uint32_t *Stop);
   void HandleInline8bitCountersInit(uint8_t *Start, uint8_t *Stop);
   void HandlePCsInit(const uintptr_t *Start, const uintptr_t *Stop);
@@ -80,8 +86,7 @@ class TracePC {
   template <class T> void HandleCmp(uintptr_t PC, T Arg1, T Arg2);
   size_t GetTotalPCCoverage();
   void SetUseCounters(bool UC) { UseCounters = UC; }
-  void SetUseClangCoverage(bool UCC) { UseClangCoverage = UCC; }
-  void SetUseValueProfile(bool VP) { UseValueProfile = VP; }
+  void SetUseValueProfileMask(uint32_t VPMask) { UseValueProfileMask = VPMask; }
   void SetPrintNewPCs(bool P) { DoPrintNewPCs = P; }
   void SetPrintNewFuncs(size_t P) { NumPrintNewFuncs = P; }
   void UpdateObservedPCs();
@@ -93,8 +98,6 @@ class TracePC {
       memset(Counters(), 0, GetNumPCs());
     ClearExtraCounters();
     ClearInlineCounters();
-    if (UseClangCoverage)
-      ClearClangCounters();
   }
 
   void ClearInlineCounters();
@@ -106,6 +109,10 @@ class TracePC {
 
   void PrintCoverage();
   void DumpCoverage();
+  void PrintUnstableStats();
+
+  template<class CallBack>
+  void IterateCoveredFunctions(CallBack CB);
 
   void AddValueForMemcmp(void *caller_pc, const void *s1, const void *s2,
                          size_t n, bool StopAtZero);
@@ -132,10 +139,23 @@ class TracePC {
       CB(PC);
   }
 
+  void SetFocusFunction(const std::string &FuncName);
+  bool ObservedFocusFunction();
+
+  void InitializeUnstableCounters();
+  bool UpdateUnstableCounters(int UnstableMode);
+  void UpdateAndApplyUnstableCounters(int UnstableMode);
+
 private:
+  struct UnstableEdge {
+    uint8_t Counter;
+    bool IsUnstable;
+  };
+
+  UnstableEdge UnstableCounters[kNumPCs];
+
   bool UseCounters = false;
-  bool UseValueProfile = false;
-  bool UseClangCoverage = false;
+  uint32_t UseValueProfileMask = false;
   bool DoPrintNewPCs = false;
   size_t NumPrintNewFuncs = 0;
 
@@ -163,7 +183,12 @@ private:
   uintptr_t *PCs() const;
 
   Set<uintptr_t> ObservedPCs;
-  Set<uintptr_t> ObservedFuncs;
+  std::unordered_map<uintptr_t, uintptr_t> ObservedFuncs;  // PC => Counter.
+
+  template <class Callback>
+  void IterateInline8bitCounters(Callback CB) const;
+
+  std::pair<size_t, size_t> FocusFunction = {-1, -1};  // Module and PC IDs.
 
   ValueBitMap ValueProfileMap;
   uintptr_t InitialStack;
@@ -196,9 +221,20 @@ void ForEachNonZeroByte(const uint8_t *Begin, const uint8_t *End,
       Handle8bitCounter(FirstFeature, P - Begin, V);
 }
 
-// Given a non-zero Counters returns a number in [0,7].
+// Given a non-zero Counter returns a number in the range [0,7].
 template<class T>
 unsigned CounterToFeature(T Counter) {
+    // Returns a feature number by placing Counters into buckets as illustrated
+    // below.
+    //
+    // Counter bucket: [1] [2] [3] [4-7] [8-15] [16-31] [32-127] [128+]
+    // Feature number:  0   1   2    3     4       5       6       7
+    //
+    // This is a heuristic taken from AFL (see
+    // http://lcamtuf.coredump.cx/afl/technical_details.txt).
+    //
+    // This implementation may change in the future so clients should
+    // not rely on it.
     assert(Counter);
     unsigned Bit = 0;
     /**/ if (Counter >= 128) Bit = 7;
@@ -219,7 +255,10 @@ void TracePC::CollectFeatures(Callback HandleFeature) const {
   size_t N = GetNumPCs();
   auto Handle8bitCounter = [&](size_t FirstFeature,
                                size_t Idx, uint8_t Counter) {
-    HandleFeature(FirstFeature + Idx * 8 + CounterToFeature(Counter));
+    if (UseCounters)
+      HandleFeature(FirstFeature + Idx * 8 + CounterToFeature(Counter));
+    else
+      HandleFeature(FirstFeature + Idx);
   };
 
   size_t FirstFeature = 0;
@@ -237,27 +276,31 @@ void TracePC::CollectFeatures(Callback HandleFeature) const {
     }
   }
 
-  if (size_t NumClangCounters = ClangCountersEnd() - ClangCountersBegin()) {
-    auto P = ClangCountersBegin();
-    for (size_t Idx = 0; Idx < NumClangCounters; Idx++)
-      if (auto Cnt = P[Idx])
-        HandleFeature(FirstFeature + Idx * 8 + CounterToFeature(Cnt));
-    FirstFeature += NumClangCounters;
-  }
-
   ForEachNonZeroByte(ExtraCountersBegin(), ExtraCountersEnd(), FirstFeature,
                      Handle8bitCounter);
   FirstFeature += (ExtraCountersEnd() - ExtraCountersBegin()) * 8;
 
-  if (UseValueProfile) {
+  if (UseValueProfileMask) {
     ValueProfileMap.ForEach([&](size_t Idx) {
       HandleFeature(FirstFeature + Idx);
     });
     FirstFeature += ValueProfileMap.SizeInBits();
   }
 
+  // Step function, grows similar to 8 * Log_2(A).
+  auto StackDepthStepFunction = [](uint32_t A) -> uint32_t {
+    if (!A) return A;
+    uint32_t Log2 = Log(A);
+    if (Log2 < 3) return A;
+    Log2 -= 3;
+    return (Log2 + 1) * 8 + ((A >> Log2) & 7);
+  };
+  assert(StackDepthStepFunction(1024) == 64);
+  assert(StackDepthStepFunction(1024 * 4) == 80);
+  assert(StackDepthStepFunction(1024 * 1024) == 144);
+
   if (auto MaxStackOffset = GetMaxStackOffset())
-    HandleFeature(FirstFeature + MaxStackOffset);
+    HandleFeature(FirstFeature + StackDepthStepFunction(MaxStackOffset / 8));
 }
 
 extern TracePC TPC;

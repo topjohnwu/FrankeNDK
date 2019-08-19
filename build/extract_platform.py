@@ -14,6 +14,8 @@
 # limitations under the License.
 #
 """Extracts the platform version from the project.properties file."""
+from __future__ import print_function
+
 import argparse
 import os.path
 import re
@@ -64,7 +66,7 @@ def main():
     # platform. Note that while we can parse any name, ndk-build only support a
     # small handful.
     with open(args.properties_file) as properties_file:
-        print get_platform(properties_file)
+        print(get_platform(properties_file))
 
 
 if __name__ == '__main__':

@@ -121,12 +121,6 @@ class ArgumentParser(gdbrunner.ArgumentParser):
             "-t", "--tui", action="store_true", dest="tui",
             help=tui_help)
 
-        debug_group.add_argument(
-            "--stdcxx-py-pr", dest="stdcxxpypr",
-            help="use C++ library pretty-printer",
-            choices=["auto", "none", "gnustl", "stlport"],
-            default="auto")
-
 
 def extract_package_name(xmlroot):
     if "package" in xmlroot.attrib:
@@ -542,16 +536,6 @@ end
                 str(bool(args.verbose)),
             ]))
 
-    # Set up the pretty printer if needed
-    if args.pypr_dir is not None and args.pypr_fn is not None:
-        gdb_commands += """
-python
-import sys
-sys.path.append("{pypr_dir}")
-from printers import {pypr_fn}
-{pypr_fn}(None)
-end""".format(pypr_dir=args.pypr_dir.replace("\\", "/"), pypr_fn=args.pypr_fn)
-
     if args.exec_file is not None:
         try:
             exec_file = open(args.exec_file, "r")
@@ -562,40 +546,6 @@ end""".format(pypr_dir=args.pypr_dir.replace("\\", "/"), pypr_fn=args.pypr_fn)
             gdb_commands += exec_file.read()
 
     return gdb_commands
-
-
-def detect_stl_pretty_printer(args):
-    stl = dump_var(args, "APP_STL")
-    if not stl:
-        detected = "none"
-        if args.stdcxxpypr == "auto":
-            log("APP_STL not found, disabling pretty printer")
-    elif stl.startswith("stlport"):
-        detected = "stlport"
-    elif stl.startswith("gnustl"):
-        detected = "gnustl"
-    else:
-        detected = "none"
-
-    if args.stdcxxpypr == "auto":
-        log("Detected pretty printer: {}".format(detected))
-        return detected
-    if detected != args.stdcxxpypr and args.stdcxxpypr != "none":
-        print("WARNING: detected APP_STL ('{}') does not match pretty printer".format(detected))
-    log("Using specified pretty printer: {}".format(args.stdcxxpypr))
-    return args.stdcxxpypr
-
-
-def find_pretty_printer(pretty_printer):
-    if pretty_printer == "gnustl":
-        path = os.path.join("libstdcxx", "gcc-4.9")
-        function = "register_libstdcxx_printers"
-    elif pretty_printer == "stlport":
-        path = os.path.join("stlport", "stlport")
-        function = "register_stlport_printers"
-    pp_path = os.path.join(
-        ndk_bin_path(), "..", "share", "pretty-printers", path)
-    return pp_path, function
 
 
 def start_jdb(adb_path, serial, jdb_cmd, pid, verbose):
@@ -688,12 +638,6 @@ def main():
 
     out_dir = os.path.join(project, (dump_var(args, "TARGET_OUT", abi)))
     out_dir = os.path.realpath(out_dir)
-
-    pretty_printer = detect_stl_pretty_printer(args)
-    if pretty_printer != "none":
-        (args.pypr_dir, args.pypr_fn) = find_pretty_printer(pretty_printer)
-    else:
-        (args.pypr_dir, args.pypr_fn) = (None, None)
 
     app_data_dir = get_app_data_dir(args, pkg_name)
     arch = abi_to_arch(abi)

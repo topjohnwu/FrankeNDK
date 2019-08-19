@@ -74,15 +74,17 @@ struct shader_module {
     // trees, constant expressions, etc requires jumping all over the instruction stream.
     std::unordered_map<unsigned, unsigned> def_index;
     bool has_valid_spirv;
+    VkShaderModule vk_shader_module;
 
-    shader_module(VkShaderModuleCreateInfo const *pCreateInfo)
+    shader_module(VkShaderModuleCreateInfo const *pCreateInfo, VkShaderModule shaderModule)
         : words((uint32_t *)pCreateInfo->pCode, (uint32_t *)pCreateInfo->pCode + pCreateInfo->codeSize / sizeof(uint32_t)),
           def_index(),
-          has_valid_spirv(true) {
-        build_def_index();
+          has_valid_spirv(true),
+          vk_shader_module(shaderModule) {
+        BuildDefIndex();
     }
 
-    shader_module() : has_valid_spirv(false) {}
+    shader_module() : has_valid_spirv(false), vk_shader_module(VK_NULL_HANDLE) {}
 
     // Expose begin() / end() to enable range-based for
     spirv_inst_iter begin() const { return spirv_inst_iter(words.begin(), words.begin() + 5); }  // First insn
@@ -99,7 +101,7 @@ struct shader_module {
         return at(it->second);
     }
 
-    void build_def_index();
+    void BuildDefIndex();
 };
 
 class ValidationCache {
@@ -192,8 +194,9 @@ class ValidationCache {
     }
 };
 
-bool validate_and_capture_pipeline_shader_state(layer_data *dev_data, PIPELINE_STATE *pPipeline);
-bool validate_compute_pipeline(layer_data *dev_data, PIPELINE_STATE *pPipeline);
+bool ValidateAndCapturePipelineShaderState(layer_data *dev_data, PIPELINE_STATE *pPipeline);
+bool ValidateComputePipeline(layer_data *dev_data, PIPELINE_STATE *pPipeline);
+bool ValidateRaytracingPipelineNVX(layer_data *dev_data, PIPELINE_STATE *pipeline);
 typedef std::pair<unsigned, unsigned> descriptor_slot_t;
 bool PreCallValidateCreateShaderModule(layer_data *dev_data, VkShaderModuleCreateInfo const *pCreateInfo, bool *spirv_valid);
 

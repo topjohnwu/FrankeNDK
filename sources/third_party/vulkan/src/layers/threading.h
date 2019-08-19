@@ -1,6 +1,6 @@
-/* Copyright (c) 2015-2016 The Khronos Group Inc.
- * Copyright (c) 2015-2016 Valve Corporation
- * Copyright (c) 2015-2016 LunarG, Inc.
+/* Copyright (c) 2015-2018 The Khronos Group Inc.
+ * Copyright (c) 2015-2018 Valve Corporation
+ * Copyright (c) 2015-2018 LunarG, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,22 +23,41 @@
 #include <condition_variable>
 #include <mutex>
 #include <vector>
+#include <unordered_set>
+#include <string>
 #include "vk_layer_config.h"
 #include "vk_layer_logging.h"
 
-#if defined(__LP64__) || defined(_WIN64) || defined(__x86_64__) || defined(_M_X64) || defined(__ia64) || defined(_M_IA64) || \
-    defined(__aarch64__) || defined(__powerpc64__)
+VK_DEFINE_NON_DISPATCHABLE_HANDLE(DISTINCT_NONDISPATCHABLE_PHONY_HANDLE)
+// The following line must match the vulkan_core.h condition guarding VK_DEFINE_NON_DISPATCHABLE_HANDLE
+#if defined(__LP64__) || defined(_WIN64) || (defined(__x86_64__) && !defined(__ILP32__)) || defined(_M_X64) || defined(__ia64) || \
+    defined(_M_IA64) || defined(__aarch64__) || defined(__powerpc64__)
 // If pointers are 64-bit, then there can be separate counters for each
 // NONDISPATCHABLE_HANDLE type.  Otherwise they are all typedef uint64_t.
 #define DISTINCT_NONDISPATCHABLE_HANDLES
+// Make sure we catch any disagreement between us and the vulkan definition
+static_assert(std::is_pointer<DISTINCT_NONDISPATCHABLE_PHONY_HANDLE>::value,
+              "Mismatched non-dispatchable handle handle, expected pointer type.");
+#else
+// Make sure we catch any disagreement between us and the vulkan definition
+static_assert(std::is_same<uint64_t, DISTINCT_NONDISPATCHABLE_PHONY_HANDLE>::value,
+              "Mismatched non-dispatchable handle handle, expected uint64_t.");
 #endif
 
-// Draw State ERROR codes
-enum THREADING_CHECKER_ERROR {
-    THREADING_CHECKER_NONE,                 // Used for INFO & other non-error messages
-    THREADING_CHECKER_MULTIPLE_THREADS,     // Object used simultaneously by multiple threads
-    THREADING_CHECKER_SINGLE_THREAD_REUSE,  // Object used simultaneously by recursion in single thread
-};
+// Suppress unused warning on Linux
+#if defined(__GNUC__)
+#define DECORATE_UNUSED __attribute__((unused))
+#else
+#define DECORATE_UNUSED
+#endif
+
+// clang-format off
+static const char DECORATE_UNUSED *kVUID_Threading_Info = "UNASSIGNED-Threading-Info";
+static const char DECORATE_UNUSED *kVUID_Threading_MultipleThreads = "UNASSIGNED-Threading-MultipleThreads";
+static const char DECORATE_UNUSED *kVUID_Threading_SingleThreadReuse = "UNASSIGNED-Threading-SingleThreadReuse";
+// clang-format on
+
+#undef DECORATE_UNUSED
 
 struct object_use_data {
     loader_platform_thread_id thread;
@@ -94,8 +113,8 @@ class counter {
             if (use_data->reader_count == 0) {
                 // There are no readers.  Two writers just collided.
                 if (use_data->thread != tid) {
-                    skipCall |= log_msg(report_data, VK_DEBUG_REPORT_ERROR_BIT_EXT, objectType, (uint64_t)(object), 0,
-                                        THREADING_CHECKER_MULTIPLE_THREADS, "THREADING",
+                    skipCall |= log_msg(report_data, VK_DEBUG_REPORT_ERROR_BIT_EXT, objectType, (uint64_t)(object),
+                                        kVUID_Threading_MultipleThreads,
                                         "THREADING ERROR : object of type %s is simultaneously used in "
                                         "thread 0x%" PRIx64 " and thread 0x%" PRIx64,
                                         typeName, (uint64_t)use_data->thread, (uint64_t)tid);
@@ -122,8 +141,8 @@ class counter {
             } else {
                 // There are readers.  This writer collided with them.
                 if (use_data->thread != tid) {
-                    skipCall |= log_msg(report_data, VK_DEBUG_REPORT_ERROR_BIT_EXT, objectType, (uint64_t)(object), 0,
-                                        THREADING_CHECKER_MULTIPLE_THREADS, "THREADING",
+                    skipCall |= log_msg(report_data, VK_DEBUG_REPORT_ERROR_BIT_EXT, objectType, (uint64_t)(object),
+                                        kVUID_Threading_MultipleThreads,
                                         "THREADING ERROR : object of type %s is simultaneously used in "
                                         "thread 0x%" PRIx64 " and thread 0x%" PRIx64,
                                         typeName, (uint64_t)use_data->thread, (uint64_t)tid);
@@ -181,11 +200,11 @@ class counter {
             use_data->thread = tid;
         } else if (uses[object].writer_count > 0 && uses[object].thread != tid) {
             // There is a writer of the object.
-            skipCall |= log_msg(report_data, VK_DEBUG_REPORT_ERROR_BIT_EXT, objectType, (uint64_t)(object), 0,
-                                THREADING_CHECKER_MULTIPLE_THREADS, "THREADING",
-                                "THREADING ERROR : object of type %s is simultaneously used in "
-                                "thread 0x%" PRIx64 " and thread 0x%" PRIx64,
-                                typeName, (uint64_t)uses[object].thread, (uint64_t)tid);
+            skipCall |=
+                log_msg(report_data, VK_DEBUG_REPORT_ERROR_BIT_EXT, objectType, (uint64_t)(object), kVUID_Threading_MultipleThreads,
+                        "THREADING ERROR : object of type %s is simultaneously used in "
+                        "thread 0x%" PRIx64 " and thread 0x%" PRIx64,
+                        typeName, (uint64_t)uses[object].thread, (uint64_t)tid);
             if (skipCall) {
                 // Wait for thread-safe access to object instead of skipping call.
                 while (uses.find(object) != uses.end()) {
@@ -228,13 +247,20 @@ struct layer_data {
 
     debug_report_data *report_data;
     std::vector<VkDebugReportCallbackEXT> logging_callback;
+    std::vector<VkDebugUtilsMessengerEXT> logging_messenger;
     VkLayerDispatchTable *device_dispatch_table;
     VkLayerInstanceDispatchTable *instance_dispatch_table;
+    std::unordered_set<std::string> device_extension_set;
+
     // The following are for keeping track of the temporary callbacks that can
     // be used in vkCreateInstance and vkDestroyInstance:
-    uint32_t num_tmp_callbacks;
-    VkDebugReportCallbackCreateInfoEXT *tmp_dbg_create_infos;
-    VkDebugReportCallbackEXT *tmp_callbacks;
+    uint32_t num_tmp_report_callbacks;
+    VkDebugReportCallbackCreateInfoEXT *tmp_report_create_infos;
+    VkDebugReportCallbackEXT *tmp_report_callbacks;
+    uint32_t num_tmp_debug_messengers;
+    VkDebugUtilsMessengerCreateInfoEXT *tmp_messenger_create_infos;
+    VkDebugUtilsMessengerEXT *tmp_debug_messengers;
+
     counter<VkCommandBuffer> c_VkCommandBuffer;
     counter<VkDevice> c_VkDevice;
     counter<VkInstance> c_VkInstance;
@@ -270,15 +296,20 @@ struct layer_data {
     counter<VkDescriptorUpdateTemplateKHR> c_VkDescriptorUpdateTemplateKHR;
     counter<VkValidationCacheEXT> c_VkValidationCacheEXT;
     counter<VkSamplerYcbcrConversionKHR> c_VkSamplerYcbcrConversionKHR;
+    counter<VkDebugUtilsMessengerEXT> c_VkDebugUtilsMessengerEXT;
+    counter<VkAccelerationStructureNVX> c_VkAccelerationStructureNVX;
 #else   // DISTINCT_NONDISPATCHABLE_HANDLES
     counter<uint64_t> c_uint64_t;
 #endif  // DISTINCT_NONDISPATCHABLE_HANDLES
 
     layer_data()
         : report_data(nullptr),
-          num_tmp_callbacks(0),
-          tmp_dbg_create_infos(nullptr),
-          tmp_callbacks(nullptr),
+          num_tmp_report_callbacks(0),
+          tmp_report_create_infos(nullptr),
+          tmp_report_callbacks(nullptr),
+          num_tmp_debug_messengers(0),
+          tmp_messenger_create_infos(nullptr),
+          tmp_debug_messengers(nullptr),
           c_VkCommandBuffer("VkCommandBuffer", VK_DEBUG_REPORT_OBJECT_TYPE_COMMAND_BUFFER_EXT),
           c_VkDevice("VkDevice", VK_DEBUG_REPORT_OBJECT_TYPE_DEVICE_EXT),
           c_VkInstance("VkInstance", VK_DEBUG_REPORT_OBJECT_TYPE_INSTANCE_EXT),
@@ -314,7 +345,10 @@ struct layer_data {
           c_VkSwapchainKHR("VkSwapchainKHR", VK_DEBUG_REPORT_OBJECT_TYPE_SWAPCHAIN_KHR_EXT),
           c_VkDescriptorUpdateTemplateKHR("VkDescriptorUpdateTemplateKHR",
                                           VK_DEBUG_REPORT_OBJECT_TYPE_DESCRIPTOR_UPDATE_TEMPLATE_KHR_EXT),
-          c_VkSamplerYcbcrConversionKHR("VkSamplerYcbcrConversionKHR", VK_DEBUG_REPORT_OBJECT_TYPE_SAMPLER_YCBCR_CONVERSION_KHR_EXT)
+          c_VkSamplerYcbcrConversionKHR("VkSamplerYcbcrConversionKHR",
+                                        VK_DEBUG_REPORT_OBJECT_TYPE_SAMPLER_YCBCR_CONVERSION_KHR_EXT),
+          c_VkDebugUtilsMessengerEXT("VkDebugUtilsMessengerEXT", VK_DEBUG_REPORT_OBJECT_TYPE_UNKNOWN_EXT),
+          c_VkAccelerationStructureNVX("VkAccelerationStructureNVX", VK_DEBUG_REPORT_OBJECT_TYPE_ACCELERATION_STRUCTURE_NVX_EXT)
 #else   // DISTINCT_NONDISPATCHABLE_HANDLES
           c_uint64_t("NON_DISPATCHABLE_HANDLE", VK_DEBUG_REPORT_OBJECT_TYPE_UNKNOWN_EXT)
 #endif  // DISTINCT_NONDISPATCHABLE_HANDLES
@@ -365,6 +399,8 @@ WRAPPER(VkSwapchainKHR)
 WRAPPER(VkDescriptorUpdateTemplateKHR)
 WRAPPER(VkValidationCacheEXT)
 WRAPPER(VkSamplerYcbcrConversionKHR)
+WRAPPER(VkDebugUtilsMessengerEXT)
+WRAPPER(VkAccelerationStructureNVX)
 #else   // DISTINCT_NONDISPATCHABLE_HANDLES
 WRAPPER(uint64_t)
 #endif  // DISTINCT_NONDISPATCHABLE_HANDLES

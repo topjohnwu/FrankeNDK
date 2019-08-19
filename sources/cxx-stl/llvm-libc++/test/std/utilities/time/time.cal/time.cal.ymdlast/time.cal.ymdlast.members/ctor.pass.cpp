@@ -32,12 +32,11 @@ int main()
 {
     using year                = std::chrono::year;
     using month               = std::chrono::month;
-    using day                 = std::chrono::day;
     using month_day_last      = std::chrono::month_day_last;
     using year_month_day_last = std::chrono::year_month_day_last;
 
     ASSERT_NOEXCEPT(year_month_day_last{year{1}, month_day_last{month{1}}});
-    
+
     constexpr month January = std::chrono::January;
 
     constexpr year_month_day_last ymdl0{year{}, month_day_last{month{}}};
@@ -45,7 +44,7 @@ int main()
     static_assert( ymdl0.month()          == month{},                 "");
     static_assert( ymdl0.month_day_last() == month_day_last{month{}}, "");
     static_assert(!ymdl0.ok(),                                        "");
-    
+
     constexpr year_month_day_last ymdl1{year{2019}, month_day_last{January}};
     static_assert( ymdl1.year()           == year{2019},              "");
     static_assert( ymdl1.month()          == January,                 "");

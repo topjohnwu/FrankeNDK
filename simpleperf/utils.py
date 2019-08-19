@@ -19,6 +19,7 @@
 """
 
 from __future__ import print_function
+import argparse
 import logging
 import os
 import os.path
@@ -69,17 +70,19 @@ def log_exit(msg):
 def disable_debug_log():
     logging.getLogger().setLevel(logging.WARN)
 
-def str_to_bytes(str):
+def str_to_bytes(str_value):
     if not is_python3():
-        return str
+        return str_value
     # In python 3, str are wide strings whereas the C api expects 8 bit strings,
     # hence we have to convert. For now using utf-8 as the encoding.
-    return str.encode('utf-8')
+    return str_value.encode('utf-8')
 
-def bytes_to_str(bytes):
+def bytes_to_str(bytes_value):
+    if not bytes_value:
+        return ''
     if not is_python3():
-        return bytes
-    return bytes.decode('utf-8')
+        return bytes_value
+    return bytes_value.decode('utf-8')
 
 def get_target_binary_path(arch, binary_name):
     if arch == 'aarch64':
@@ -94,21 +97,21 @@ def get_target_binary_path(arch, binary_name):
 
 
 def get_host_binary_path(binary_name):
-    dir = os.path.join(get_script_dir(), 'bin')
+    dirname = os.path.join(get_script_dir(), 'bin')
     if is_windows():
         if binary_name.endswith('.so'):
             binary_name = binary_name[0:-3] + '.dll'
         elif '.' not in binary_name:
             binary_name += '.exe'
-        dir = os.path.join(dir, 'windows')
+        dirname = os.path.join(dirname, 'windows')
     elif sys.platform == 'darwin': # OSX
         if binary_name.endswith('.so'):
             binary_name = binary_name[0:-3] + '.dylib'
-        dir = os.path.join(dir, 'darwin')
+        dirname = os.path.join(dirname, 'darwin')
     else:
-        dir = os.path.join(dir, 'linux')
-    dir = os.path.join(dir, 'x86_64' if sys.maxsize > 2 ** 32 else 'x86')
-    binary_path = os.path.join(dir, binary_name)
+        dirname = os.path.join(dirname, 'linux')
+    dirname = os.path.join(dirname, 'x86_64' if sys.maxsize > 2 ** 32 else 'x86')
+    binary_path = os.path.join(dirname, binary_name)
     if not os.path.isfile(binary_path):
         log_fatal("can't find binary: %s" % binary_path)
     return binary_path
@@ -121,7 +124,7 @@ def is_executable_available(executable, option='--help'):
                                    stderr=subprocess.PIPE)
         subproc.communicate()
         return subproc.returncode == 0
-    except:
+    except OSError:
         return False
 
 DEFAULT_NDK_PATH = {
@@ -145,6 +148,9 @@ EXPECTED_TOOLS = {
         'accept_tool_without_arch': True
     },
     'objdump': {
+        'is_binutils': True,
+    },
+    'strip': {
         'is_binutils': True,
     },
 }
@@ -235,10 +241,10 @@ class AdbHelper(object):
         else:
             subproc = subprocess.Popen(adb_args, stdout=subprocess.PIPE)
             (stdoutdata, _) = subproc.communicate()
+            stdoutdata = bytes_to_str(stdoutdata)
             returncode = subproc.returncode
         result = (returncode == 0)
         if stdoutdata and adb_args[1] != 'push' and adb_args[1] != 'pull':
-            stdoutdata = bytes_to_str(stdoutdata)
             if log_output:
                 log_debug(stdoutdata)
         log_debug('run adb cmd: %s  [result %s]' % (adb_args, result))
@@ -304,6 +310,7 @@ class AdbHelper(object):
         if '86' in output:
             return 'x86'
         log_fatal('unsupported architecture: %s' % output.strip())
+        return ''
 
 
     def get_android_version(self):
@@ -342,21 +349,24 @@ def open_report_in_browser(report_path):
         try:
             subprocess.check_call(['open', report_path])
             return
-        except:
+        except subprocess.CalledProcessError:
             pass
     import webbrowser
     try:
         # Try to open the report with Chrome
-        browser_key = ''
-        for key, _ in webbrowser._browsers.items():
-            if 'chrome' in key:
-                browser_key = key
-        browser = webbrowser.get(browser_key)
+        browser = webbrowser.get('google-chrome')
         browser.open(report_path, new=0, autoraise=True)
-    except:
+    except webbrowser.Error:
         # webbrowser.get() doesn't work well on darwin/windows.
         webbrowser.open_new_tab(report_path)
 
+def is_elf_file(path):
+    if os.path.isfile(path):
+        with open(path, 'rb') as fh:
+            data = fh.read(4)
+            if len(data) == 4 and bytes_to_str(data) == '\x7fELF':
+                return True
+    return False
 
 def find_real_dso_path(dso_path_in_record_file, binary_cache_path):
     """ Given the path of a shared library in perf.data, find its real path in the file system. """
@@ -364,9 +374,9 @@ def find_real_dso_path(dso_path_in_record_file, binary_cache_path):
         return None
     if binary_cache_path:
         tmp_path = os.path.join(binary_cache_path, dso_path_in_record_file[1:])
-        if os.path.isfile(tmp_path):
+        if is_elf_file(tmp_path):
             return tmp_path
-    if os.path.isfile(dso_path_in_record_file):
+    if is_elf_file(dso_path_in_record_file):
         return dso_path_in_record_file
     return None
 
@@ -415,17 +425,20 @@ class Addr2Nearestline(object):
             self.func_addr = func_addr
             self.source_lines = None
 
-    def __init__(self, ndk_path, binary_cache_path):
+    def __init__(self, ndk_path, binary_cache_path, with_function_name):
         self.addr2line_path = find_tool_path('addr2line', ndk_path)
         if not self.addr2line_path:
-            log_exit("Can't find addr2line. Please set ndk path with --ndk-path option.")
+            log_exit("Can't find addr2line. Please set ndk path with --ndk_path option.")
         self.readelf = ReadElf(ndk_path)
         self.dso_map = {}  # map from dso_path to Dso.
         self.binary_cache_path = binary_cache_path
+        self.with_function_name = with_function_name
         # Saving file names for each addr takes a lot of memory. So we store file ids in Addr,
         # and provide data structures connecting file id and file name here.
         self.file_name_to_id = {}
         self.file_id_to_name = []
+        self.func_name_to_id = {}
+        self.func_id_to_name = []
 
     def add_addr(self, dso_path, func_addr, addr):
         dso = self.dso_map.get(dso_path)
@@ -486,19 +499,26 @@ class Addr2Nearestline(object):
 
         # 2. Use addr2line to collect line info.
         try:
-            subproc = subprocess.Popen([self.addr2line_path, '-ai', '-e', real_path],
+            option = '-ai' + ('fC' if self.with_function_name else '')
+            subproc = subprocess.Popen([self.addr2line_path, option, '-e', real_path],
                                        stdin=subprocess.PIPE, stdout=subprocess.PIPE)
             (stdoutdata, _) = subproc.communicate(str_to_bytes(addr_request))
             stdoutdata = bytes_to_str(stdoutdata)
-        except:
+        except OSError:
             return
         addr_map = {}
         cur_line_list = None
+        need_function_name = self.with_function_name
+        cur_function_name = None
         for line in stdoutdata.strip().split('\n'):
             if line[:2] == '0x':
                 # a new address
                 cur_line_list = addr_map[int(line, 16)] = []
+            elif need_function_name:
+                cur_function_name = line.strip()
+                need_function_name = False
             else:
+                need_function_name = self.with_function_name
                 # a file:line.
                 if cur_line_list is None:
                     continue
@@ -521,7 +541,11 @@ class Addr2Nearestline(object):
                 except ValueError:
                     continue
                 file_id = self._get_file_id(file_path)
-                cur_line_list.append((file_id, line_number))
+                if self.with_function_name:
+                    func_id = self._get_func_id(cur_function_name)
+                    cur_line_list.append((file_id, line_number, func_id))
+                else:
+                    cur_line_list.append((file_id, line_number))
 
         # 3. Fill line info in dso.addrs.
         for addr in dso.addrs:
@@ -544,6 +568,13 @@ class Addr2Nearestline(object):
             self.file_id_to_name.append(file_path)
         return file_id
 
+    def _get_func_id(self, func_name):
+        func_id = self.func_name_to_id.get(func_name)
+        if func_id is None:
+            func_id = self.func_name_to_id[func_name] = len(self.func_id_to_name)
+            self.func_id_to_name.append(func_name)
+        return func_id
+
     def get_dso(self, dso_path):
         return self.dso_map.get(dso_path)
 
@@ -551,7 +582,73 @@ class Addr2Nearestline(object):
         source = dso.addrs[addr].source_lines
         if source is None:
             return None
+        if self.with_function_name:
+            return [(self.file_id_to_name[file_id], line, self.func_id_to_name[func_id])
+                    for (file_id, line, func_id) in source]
         return [(self.file_id_to_name[file_id], line) for (file_id, line) in source]
+
+
+class SourceFileSearcher(object):
+    """ Find source file paths in the file system.
+        The file paths reported by addr2line are the paths stored in debug sections
+        of shared libraries. And we need to convert them to file paths in the file
+        system. It is done in below steps:
+        1. Collect all file paths under the provided source_dirs. The suffix of a
+           source file should contain one of below:
+            h: for C/C++ header files.
+            c: for C/C++ source files.
+            java: for Java source files.
+            kt: for Kotlin source files.
+        2. Given an abstract_path reported by addr2line, select the best real path
+           as below:
+           2.1 Find all real paths with the same file name as the abstract path.
+           2.2 Select the real path having the longest common suffix with the abstract path.
+    """
+
+    SOURCE_FILE_EXTS = {'.h', '.hh', '.H', '.hxx', '.hpp', '.h++',
+                        '.c', '.cc', '.C', '.cxx', '.cpp', '.c++',
+                        '.java', '.kt'}
+
+    @classmethod
+    def is_source_filename(cls, filename):
+        ext = os.path.splitext(filename)[1]
+        return ext in cls.SOURCE_FILE_EXTS
+
+    def __init__(self, source_dirs):
+        # Map from filename to a list of reversed directory path containing filename.
+        self.filename_to_rparents = {}
+        self._collect_paths(source_dirs)
+
+    def _collect_paths(self, source_dirs):
+        for source_dir in source_dirs:
+            for parent, _, file_names in os.walk(source_dir):
+                rparent = None
+                for file_name in file_names:
+                    if self.is_source_filename(file_name):
+                        rparents = self.filename_to_rparents.get(file_name)
+                        if rparents is None:
+                            rparents = self.filename_to_rparents[file_name] = []
+                        if rparent is None:
+                            rparent = parent[::-1]
+                        rparents.append(rparent)
+
+    def get_real_path(self, abstract_path):
+        abstract_path = abstract_path.replace('/', os.sep)
+        abstract_parent, file_name = os.path.split(abstract_path)
+        abstract_rparent = abstract_parent[::-1]
+        real_rparents = self.filename_to_rparents.get(file_name)
+        if real_rparents is None:
+            return None
+        best_matched_rparent = None
+        best_common_length = -1
+        for real_rparent in real_rparents:
+            length = len(os.path.commonprefix((real_rparent, abstract_rparent)))
+            if length > best_common_length:
+                best_common_length = length
+                best_matched_rparent = real_rparent
+        if best_matched_rparent is None:
+            return None
+        return os.path.join(best_matched_rparent[::-1], file_name)
 
 
 class Objdump(object):
@@ -562,19 +659,20 @@ class Objdump(object):
         self.readelf = ReadElf(ndk_path)
         self.objdump_paths = {}
 
-    def disassemble_code(self, dso_path, start_addr, addr_len):
-        """ Disassemble [start_addr, start_addr + addr_len] of dso_path.
-            Return a list of pair (disassemble_code_line, addr).
-        """
-        # 1. Find real path.
+    def get_dso_info(self, dso_path):
         real_path = find_real_dso_path(dso_path, self.binary_cache_path)
-        if real_path is None:
+        if not real_path:
             return None
-
-        # 2. Get path of objdump.
         arch = self.readelf.get_arch(real_path)
         if arch == 'unknown':
             return None
+        return (real_path, arch)
+
+    def disassemble_code(self, dso_info, start_addr, addr_len):
+        """ Disassemble [start_addr, start_addr + addr_len] of dso_path.
+            Return a list of pair (disassemble_code_line, addr).
+        """
+        real_path, arch = dso_info
         objdump_path = self.objdump_paths.get(arch)
         if not objdump_path:
             objdump_path = find_tool_path('objdump', self.ndk_path, arch)
@@ -591,7 +689,7 @@ class Objdump(object):
             subproc = subprocess.Popen(args, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
             (stdoutdata, _) = subproc.communicate()
             stdoutdata = bytes_to_str(stdoutdata)
-        except:
+        except OSError:
             return None
 
         if not stdoutdata:
@@ -617,53 +715,57 @@ class ReadElf(object):
 
     def get_arch(self, elf_file_path):
         """ Get arch of an elf file. """
-        try:
-            output = subprocess.check_output([self.readelf_path, '-h', elf_file_path])
-            if output.find('AArch64') != -1:
-                return 'arm64'
-            if output.find('ARM') != -1:
-                return 'arm'
-            if output.find('X86-64') != -1:
-                return 'x86_64'
-            if output.find('80386') != -1:
-                return 'x86'
-        except subprocess.CalledProcessError:
-            pass
+        if is_elf_file(elf_file_path):
+            try:
+                output = subprocess.check_output([self.readelf_path, '-h', elf_file_path])
+                output = bytes_to_str(output)
+                if output.find('AArch64') != -1:
+                    return 'arm64'
+                if output.find('ARM') != -1:
+                    return 'arm'
+                if output.find('X86-64') != -1:
+                    return 'x86_64'
+                if output.find('80386') != -1:
+                    return 'x86'
+            except subprocess.CalledProcessError:
+                pass
         return 'unknown'
 
     def get_build_id(self, elf_file_path):
         """ Get build id of an elf file. """
-        try:
-            output = subprocess.check_output([self.readelf_path, '-n', elf_file_path])
-            output = bytes_to_str(output)
-            result = re.search(r'Build ID:\s*(\S+)', output)
-            if result:
-                build_id = result.group(1)
-                if len(build_id) < 40:
-                    build_id += '0' * (40 - len(build_id))
-                else:
-                    build_id = build_id[:40]
-                build_id = '0x' + build_id
-                return build_id
-        except subprocess.CalledProcessError:
-            pass
+        if is_elf_file(elf_file_path):
+            try:
+                output = subprocess.check_output([self.readelf_path, '-n', elf_file_path])
+                output = bytes_to_str(output)
+                result = re.search(r'Build ID:\s*(\S+)', output)
+                if result:
+                    build_id = result.group(1)
+                    if len(build_id) < 40:
+                        build_id += '0' * (40 - len(build_id))
+                    else:
+                        build_id = build_id[:40]
+                    build_id = '0x' + build_id
+                    return build_id
+            except subprocess.CalledProcessError:
+                pass
         return ""
 
     def get_sections(self, elf_file_path):
         """ Get sections of an elf file. """
         section_names = []
-        try:
-            output = subprocess.check_output([self.readelf_path, '-SW', elf_file_path])
-            output = bytes_to_str(output)
-            for line in output.split('\n'):
-                # Parse line like:" [ 1] .note.android.ident NOTE  0000000000400190 ...".
-                result = re.search(r'^\s+\[\s*\d+\]\s(.+?)\s', line)
-                if result:
-                    section_name = result.group(1).strip()
-                    if section_name:
-                        section_names.append(section_name)
-        except subprocess.CalledProcessError:
-            pass
+        if is_elf_file(elf_file_path):
+            try:
+                output = subprocess.check_output([self.readelf_path, '-SW', elf_file_path])
+                output = bytes_to_str(output)
+                for line in output.split('\n'):
+                    # Parse line like:" [ 1] .note.android.ident NOTE  0000000000400190 ...".
+                    result = re.search(r'^\s+\[\s*\d+\]\s(.+?)\s', line)
+                    if result:
+                        section_name = result.group(1).strip()
+                        if section_name:
+                            section_names.append(section_name)
+            except subprocess.CalledProcessError:
+                pass
         return section_names
 
 def extant_dir(arg):
@@ -677,8 +779,21 @@ def extant_dir(arg):
     """
     path = os.path.realpath(arg)
     if not os.path.isdir(path):
-        import argparse
         raise argparse.ArgumentTypeError('{} is not a directory.'.format(path))
+    return path
+
+def extant_file(arg):
+    """ArgumentParser type that only accepts extant files.
+
+    Args:
+        arg: The string argument given on the command line.
+    Returns: The argument as a realpath.
+    Raises:
+        argparse.ArgumentTypeError: The given path isn't a file.
+    """
+    path = os.path.realpath(arg)
+    if not os.path.isfile(path):
+        raise argparse.ArgumentTypeError('{} is not a file.'.format(path))
     return path
 
 logging.getLogger().setLevel(logging.DEBUG)

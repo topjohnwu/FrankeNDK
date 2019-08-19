@@ -13,6 +13,7 @@
 #define LLVM_FUZZER_UTIL_H
 
 #include "FuzzerDefs.h"
+#include "FuzzerCommand.h"
 
 namespace fuzzer {
 
@@ -39,6 +40,10 @@ void PrintPC(const char *SymbolizedFMT, const char *FallbackFMT, uintptr_t PC);
 
 std::string DescribePC(const char *SymbolizedFMT, uintptr_t PC);
 
+void PrintStackTrace();
+
+void PrintMemoryProfile();
+
 unsigned NumberOfCpuCores();
 
 // Platform specific functions.
@@ -50,7 +55,7 @@ unsigned long GetPid();
 
 size_t GetPeakRSSMb();
 
-int ExecuteCommand(const std::string &Command);
+int ExecuteCommand(const Command &Cmd);
 
 FILE *OpenProcessPipe(const char *Command, const char *Mode);
 
@@ -78,6 +83,8 @@ std::string DisassembleCmd(const std::string &FileName);
 std::string SearchRegexCmd(const std::string &Regex);
 
 size_t SimpleFastHash(const uint8_t *Data, size_t Size);
+
+inline uint32_t Log(uint32_t X) { return 32 - __builtin_clz(X) - 1; }
 
 }  // namespace fuzzer
 

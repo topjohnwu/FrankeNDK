@@ -1,7 +1,7 @@
-/* Copyright (c) 2015-2016 The Khronos Group Inc.
- * Copyright (c) 2015-2016 Valve Corporation
- * Copyright (c) 2015-2016 LunarG, Inc.
- * Copyright (C) 2015-2016 Google Inc.
+/* Copyright (c) 2015-2018 The Khronos Group Inc.
+ * Copyright (c) 2015-2018 Valve Corporation
+ * Copyright (c) 2015-2018 LunarG, Inc.
+ * Copyright (C) 2015-2018 Google Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,7 +23,6 @@
 
 #pragma once
 #include "core_validation_error_enums.h"
-#include "vk_validation_error_messages.h"
 #include "core_validation_types.h"
 #include "descriptor_sets.h"
 #include "vk_layer_logging.h"
@@ -67,11 +66,6 @@
  */
 // TODO : Is there a way to track when Cmd Buffer finishes & remove mem references at that point?
 // TODO : Could potentially store a list of freed mem allocs to flag when they're incorrectly used
-
-struct GENERIC_HEADER {
-    VkStructureType sType;
-    const void *pNext;
-};
 
 enum SyncScope {
     kSyncScopeInternal,
@@ -133,7 +127,7 @@ struct PHYSICAL_DEVICE_STATE {
     CALL_STATE vkGetPhysicalDeviceSurfacePresentModesKHRState = UNCALLED;
     CALL_STATE vkGetPhysicalDeviceSurfaceFormatsKHRState = UNCALLED;
     CALL_STATE vkGetPhysicalDeviceDisplayPlanePropertiesKHRState = UNCALLED;
-    VkPhysicalDeviceFeatures features = {};
+    safe_VkPhysicalDeviceFeatures2 features2 = {};
     VkPhysicalDevice phys_device = VK_NULL_HANDLE;
     uint32_t queue_family_count = 0;
     std::vector<VkQueueFamilyProperties> queue_family_properties;

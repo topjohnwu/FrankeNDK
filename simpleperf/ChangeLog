@@ -1,4 +1,25 @@
 
+ndk r19
+Fix report-sample command on Windows.
+
+ndk r18
+Improve support of profiling JITed/interpreted Java code on Android >= P:
+  1) Support JITed/interpreted Java code in system wide recording.
+  2) Support dex files extracted to memory.
+  3) Fix some bugs and improve inefficient code.
+Improve record command:
+  1) Add a user space buffer and a high priority record reading thread to reduce sampe lost rate.
+  2) Record full process name instead of only the last 16 bytes.
+Improve report_html.py:
+  1) Generate flamegraphs in Javascript code instead of using inferno, thus
+	   reducing the time used to generate and load report.
+  2) Use bootstrap 4 to format UI.
+  3) Use progressbar to show progress of loading contents.
+  4) Add --binary_filter option to only annotate selected binaries.
+Export tracing data in simpleperf_report_lib.py.
+Test python scripts with both python2 and python3.
+Add document for using simpleperf in Android platform profiling.
+
 ndk r17
 (release)
 Use new Android unwinder, which can unwind for archs different from build.

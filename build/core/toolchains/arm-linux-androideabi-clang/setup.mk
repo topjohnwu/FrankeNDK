@@ -13,80 +13,32 @@
 # limitations under the License.
 #
 
-# this file is used to prepare the NDK to build with the arm clang toolchain any
-# number of source files
-#
-# its purpose is to define (or re-define) templates used to build
-# various sources into target object files, libraries or executables.
-#
-# Note that this file may end up being parsed several times in future
-# revisions of the NDK.
-#
-
-#
-# Override the toolchain prefix
-#
-
 TOOLCHAIN_NAME := arm-linux-androideabi
-BINUTILS_ROOT := $(call get-binutils-root,$(NDK_ROOT),$(TOOLCHAIN_NAME))
-TOOLCHAIN_ROOT := $(call get-toolchain-root,$(TOOLCHAIN_NAME)-4.9)
-TOOLCHAIN_PREFIX := $(TOOLCHAIN_ROOT)/bin/$(TOOLCHAIN_NAME)-
-
-#
-# CFLAGS and LDFLAGS
-#
+LLVM_TRIPLE := armv7-none-linux-androideabi
 
 TARGET_ASAN_BASENAME := libclang_rt.asan-arm-android.so
 TARGET_UBSAN_BASENAME := libclang_rt.ubsan_standalone-arm-android.so
 
-TARGET_CFLAGS := \
-    -gcc-toolchain $(call host-path,$(TOOLCHAIN_ROOT)) \
-    -fpic \
-    -ffunction-sections \
-    -funwind-tables \
-    -fstack-protector-strong \
-    -Wno-invalid-command-line-argument \
-    -Wno-unused-command-line-argument \
-    -no-canonical-prefixes
+TARGET_CFLAGS := -fpic
 
-# Always enable debug info. We strip binaries when needed.
-TARGET_CFLAGS += -g
+# Clang does not set this up properly when using -fno-integrated-as.
+# https://github.com/android-ndk/ndk/issues/906
+TARGET_CFLAGS += -march=armv7-a
 
-TARGET_LDFLAGS += \
-    -gcc-toolchain $(call host-path,$(TOOLCHAIN_ROOT)) \
-    -no-canonical-prefixes
-
-LLVM_TRIPLE := armv7-none-linux-androideabi$(APP_PLATFORM_LEVEL)
-
-TARGET_CFLAGS += -target $(LLVM_TRIPLE) \
-                 -march=armv7-a \
-                 -mfloat-abi=softfp \
-                 -mfpu=vfpv3-d16
-
-TARGET_LDFLAGS += -target $(LLVM_TRIPLE) \
-                  -Wl,--fix-cortex-a8
-
-GCCLIB_SUBDIR := armv7-a
-
-# Append the platform level for __attribute__((availability)).
-LLVM_TRIPLE := $(LLVM_TRIPLE)$(APP_PLATFORM_LEVEL)
-
-GCCLIB_ROOT := $(call get-gcclibs-path,$(NDK_ROOT),$(TOOLCHAIN_NAME))
+TARGET_LDFLAGS :=
 
 TARGET_CFLAGS.neon := -mfpu=neon
 
 TARGET_arm_release_CFLAGS := \
-    -marm \
     -O2 \
     -DNDEBUG \
 
 TARGET_thumb_release_CFLAGS := \
     -mthumb \
-    -Os \
+    -Oz \
     -DNDEBUG \
 
 TARGET_arm_debug_CFLAGS := \
-    -marm \
     -O0 \
     -UNDEBUG \
     -fno-limit-debug-info \

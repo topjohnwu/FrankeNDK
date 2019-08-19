@@ -266,24 +266,18 @@ if [ "$NDK_ANALYZE" = 1 ]; then
     APP_ABIS=`get_build_var APP_ABI`
     TOOLCHAIN=`get_build_var NDK_TOOLCHAIN_VERSION`
     for ABI in $APP_ABIS; do
-        TOOLCHAIN_PREFIX=`get_build_var_for_abi TOOLCHAIN_PREFIX $ABI`
-        LLVM_PATH=$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/$HOST_TAG
+        LLVM_TOOLCHAIN_PREFIX=`get_build_var LLVM_TOOLCHAIN_PREFIX`
         ANALYZER_OUT=`get_build_var NDK_APP_ANALYZER_OUT`
 
-        if [ "$TOOLCHAIN" = "clang" ]; then
-            ANALYZER_CC=$LLVM_PATH/bin/clang
-            ANALYZER_CXX=$LLVM_PATH/bin/clang++
-        else
-            ANALYZER_CC=${TOOLCHAIN_PREFIX}gcc
-            ANALYZER_CXX=${TOOLCHAIN_PREFIX}g++
-        fi
+        ANALYZER_CC=${LLVM_TOOLCHAIN_PREFIX}clang
+        ANALYZER_CXX=${LLVM_TOOLCHAIN_PREFIX}clang++
 
         ANALYZER_OUT_FLAG=
         if [ -n "$NDK_ANALYZER_OUT" ]; then
             ANALYZER_OUT_FLAG="-o $NDK_ANALYZER_OUT/$ABI"
         fi
 
-        perl $LLVM_PATH/bin/scan-build \
+        perl ${LLVM_TOOLCHAIN_PREFIX}scan-build \
             --use-cc $ANALYZER_CC \
             --use-c++ $ANALYZER_CXX \
             --status-bugs \

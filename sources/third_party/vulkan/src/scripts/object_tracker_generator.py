@@ -1,9 +1,9 @@
 #!/usr/bin/python3 -i
 #
-# Copyright (c) 2015-2017 The Khronos Group Inc.
-# Copyright (c) 2015-2017 Valve Corporation
-# Copyright (c) 2015-2017 LunarG, Inc.
-# Copyright (c) 2015-2017 Google Inc.
+# Copyright (c) 2015-2018 The Khronos Group Inc.
+# Copyright (c) 2015-2018 Valve Corporation
+# Copyright (c) 2015-2018 LunarG, Inc.
+# Copyright (c) 2015-2018 Google Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,12 +18,13 @@
 # limitations under the License.
 #
 # Author: Mark Lobodzinski <mark@lunarg.com>
+# Author: Dave Houlton <daveh@lunarg.com>
 
-import os,re,sys,string
+import os,re,sys,string,json
 import xml.etree.ElementTree as etree
 from generator import *
 from collections import namedtuple
-from vuid_mapping import *
+from common_codegen import *
 
 # This is a workaround to use a Python 2.7 and 3.x compatible syntax.
 from io import open
@@ -72,34 +73,36 @@ class ObjectTrackerGeneratorOptions(GeneratorOptions):
                  defaultExtensions = None,
                  addExtensions = None,
                  removeExtensions = None,
+                 emitExtensions = None,
                  sortProcedure = regSortFeatures,
                  prefixText = "",
                  genFuncPointers = True,
                  protectFile = True,
                  protectFeature = True,
-                 protectProto = None,
-                 protectProtoStr = None,
                  apicall = '',
                  apientry = '',
                  apientryp = '',
                  indentFuncProto = True,
                  indentFuncPointer = False,
-                 alignFuncParam = 0):
+                 alignFuncParam = 0,
+                 expandEnumerants = True,
+                 valid_usage_path = ''):
         GeneratorOptions.__init__(self, filename, directory, apiname, profile,
                                   versions, emitversions, defaultExtensions,
-                                  addExtensions, removeExtensions, sortProcedure)
+                                  addExtensions, removeExtensions, emitExtensions, sortProcedure)
         self.prefixText      = prefixText
         self.genFuncPointers = genFuncPointers
         self.protectFile     = protectFile
         self.protectFeature  = protectFeature
-        self.protectProto    = protectProto
-        self.protectProtoStr = protectProtoStr
         self.apicall         = apicall
         self.apientry        = apientry
         self.apientryp       = apientryp
         self.indentFuncProto = indentFuncProto
         self.indentFuncPointer = indentFuncPointer
         self.alignFuncParam  = alignFuncParam
+        self.expandEnumerants = expandEnumerants
+        self.valid_usage_path = valid_usage_path
+
 
 # ObjectTrackerOutputGenerator - subclass of OutputGenerator.
 # Generates object_tracker layer object validation code
@@ -139,6 +142,7 @@ class ObjectTrackerOutputGenerator(OutputGenerator):
             'vkDestroySwapchainKHR',
             'vkDestroyDescriptorPool',
             'vkDestroyCommandPool',
+            'vkGetPhysicalDeviceQueueFamilyProperties2',
             'vkGetPhysicalDeviceQueueFamilyProperties2KHR',
             'vkResetDescriptorPool',
             'vkBeginCommandBuffer',
@@ -168,49 +172,68 @@ class ObjectTrackerOutputGenerator(OutputGenerator):
             'vkNegotiateLoaderLayerInterfaceVersion',
             'vkCreateComputePipelines',
             'vkGetDeviceQueue',
+            'vkGetDeviceQueue2',
             'vkGetSwapchainImagesKHR',
             'vkCreateDescriptorSetLayout',
+            'vkGetDescriptorSetLayoutSupport',
+            'vkGetDescriptorSetLayoutSupportKHR',
+            'vkCreateDebugUtilsMessengerEXT',
+            'vkDestroyDebugUtilsMessengerEXT',
+            'vkSubmitDebugUtilsMessageEXT',
+            'vkSetDebugUtilsObjectNameEXT',
+            'vkSetDebugUtilsObjectTagEXT',
+            'vkQueueBeginDebugUtilsLabelEXT',
+            'vkQueueEndDebugUtilsLabelEXT',
+            'vkQueueInsertDebugUtilsLabelEXT',
+            'vkCmdBeginDebugUtilsLabelEXT',
+            'vkCmdEndDebugUtilsLabelEXT',
+            'vkCmdInsertDebugUtilsLabelEXT',
+            'vkGetDisplayModePropertiesKHR',
+            'vkGetPhysicalDeviceDisplayPropertiesKHR',
+            'vkGetPhysicalDeviceDisplayProperties2KHR',
+            'vkGetDisplayPlaneSupportedDisplaysKHR',
+            'vkGetDisplayModeProperties2KHR',
             ]
         # These VUIDS are not implicit, but are best handled in this layer. Codegen for vkDestroy calls will generate a key
         # which is translated here into a good VU.  Saves ~40 checks.
         self.manual_vuids = dict()
         self.manual_vuids = {
-            "fence-compatalloc": "VALIDATION_ERROR_24e008c2",
-            "fence-nullalloc": "VALIDATION_ERROR_24e008c4",
-            "event-compatalloc": "VALIDATION_ERROR_24c008f4",
-            "event-nullalloc": "VALIDATION_ERROR_24c008f6",
-            "buffer-compatalloc": "VALIDATION_ERROR_23c00736",
-            "buffer-nullalloc": "VALIDATION_ERROR_23c00738",
-            "image-compatalloc": "VALIDATION_ERROR_252007d2",
-            "image-nullalloc": "VALIDATION_ERROR_252007d4",
-            "shaderModule-compatalloc": "VALIDATION_ERROR_26a00888",
-            "shaderModule-nullalloc": "VALIDATION_ERROR_26a0088a",
-            "pipeline-compatalloc": "VALIDATION_ERROR_25c005fc",
-            "pipeline-nullalloc": "VALIDATION_ERROR_25c005fe",
-            "sampler-compatalloc": "VALIDATION_ERROR_26600876",
-            "sampler-nullalloc": "VALIDATION_ERROR_26600878",
-            "renderPass-compatalloc": "VALIDATION_ERROR_264006d4",
-            "renderPass-nullalloc": "VALIDATION_ERROR_264006d6",
-            "descriptorUpdateTemplate-compatalloc": "VALIDATION_ERROR_248002c8",
-            "descriptorUpdateTemplate-nullalloc": "VALIDATION_ERROR_248002ca",
-            "imageView-compatalloc": "VALIDATION_ERROR_25400806",
-            "imageView-nullalloc": "VALIDATION_ERROR_25400808",
-            "pipelineCache-compatalloc": "VALIDATION_ERROR_25e00606",
-            "pipelineCache-nullalloc": "VALIDATION_ERROR_25e00608",
-            "pipelineLayout-compatalloc": "VALIDATION_ERROR_26000256",
-            "pipelineLayout-nullalloc": "VALIDATION_ERROR_26000258",
-            "descriptorSetLayout-compatalloc": "VALIDATION_ERROR_24600238",
-            "descriptorSetLayout-nullalloc": "VALIDATION_ERROR_2460023a",
-            "semaphore-compatalloc": "VALIDATION_ERROR_268008e4",
-            "semaphore-nullalloc": "VALIDATION_ERROR_268008e6",
-            "queryPool-compatalloc": "VALIDATION_ERROR_26200634",
-            "queryPool-nullalloc": "VALIDATION_ERROR_26200636",
-            "bufferView-compatalloc": "VALIDATION_ERROR_23e00752",
-            "bufferView-nullalloc": "VALIDATION_ERROR_23e00754",
-            "surface-compatalloc": "VALIDATION_ERROR_26c009e6",
-            "surface-nullalloc": "VALIDATION_ERROR_26c009e8",
-            "framebuffer-compatalloc": "VALIDATION_ERROR_250006fa",
-            "framebuffer-nullalloc": "VALIDATION_ERROR_250006fc",
+            "fence-compatalloc": "\"VUID-vkDestroyFence-fence-01121\"",
+            "fence-nullalloc": "\"VUID-vkDestroyFence-fence-01122\"",
+            "event-compatalloc": "\"VUID-vkDestroyEvent-event-01146\"",
+            "event-nullalloc": "\"VUID-vkDestroyEvent-event-01147\"",
+            "buffer-compatalloc": "\"VUID-vkDestroyBuffer-buffer-00923\"",
+            "buffer-nullalloc": "\"VUID-vkDestroyBuffer-buffer-00924\"",
+            "image-compatalloc": "\"VUID-vkDestroyImage-image-01001\"",
+            "image-nullalloc": "\"VUID-vkDestroyImage-image-01002\"",
+            "shaderModule-compatalloc": "\"VUID-vkDestroyShaderModule-shaderModule-01092\"",
+            "shaderModule-nullalloc": "\"VUID-vkDestroyShaderModule-shaderModule-01093\"",
+            "pipeline-compatalloc": "\"VUID-vkDestroyPipeline-pipeline-00766\"",
+            "pipeline-nullalloc": "\"VUID-vkDestroyPipeline-pipeline-00767\"",
+            "sampler-compatalloc": "\"VUID-vkDestroySampler-sampler-01083\"",
+            "sampler-nullalloc": "\"VUID-vkDestroySampler-sampler-01084\"",
+            "renderPass-compatalloc": "\"VUID-vkDestroyRenderPass-renderPass-00874\"",
+            "renderPass-nullalloc": "\"VUID-vkDestroyRenderPass-renderPass-00875\"",
+            "descriptorUpdateTemplate-compatalloc": "\"VUID-vkDestroyDescriptorUpdateTemplate-descriptorSetLayout-00356\"",
+            "descriptorUpdateTemplate-nullalloc": "\"VUID-vkDestroyDescriptorUpdateTemplate-descriptorSetLayout-00357\"",
+            "imageView-compatalloc": "\"VUID-vkDestroyImageView-imageView-01027\"",
+            "imageView-nullalloc": "\"VUID-vkDestroyImageView-imageView-01028\"",
+            "pipelineCache-compatalloc": "\"VUID-vkDestroyPipelineCache-pipelineCache-00771\"",
+            "pipelineCache-nullalloc": "\"VUID-vkDestroyPipelineCache-pipelineCache-00772\"",
+            "pipelineLayout-compatalloc": "\"VUID-vkDestroyPipelineLayout-pipelineLayout-00299\"",
+            "pipelineLayout-nullalloc": "\"VUID-vkDestroyPipelineLayout-pipelineLayout-00300\"",
+            "descriptorSetLayout-compatalloc": "\"VUID-vkDestroyDescriptorSetLayout-descriptorSetLayout-00284\"",
+            "descriptorSetLayout-nullalloc": "\"VUID-vkDestroyDescriptorSetLayout-descriptorSetLayout-00285\"",
+            "semaphore-compatalloc": "\"VUID-vkDestroySemaphore-semaphore-01138\"",
+            "semaphore-nullalloc": "\"VUID-vkDestroySemaphore-semaphore-01139\"",
+            "queryPool-compatalloc": "\"VUID-vkDestroyQueryPool-queryPool-00794\"",
+            "queryPool-nullalloc": "\"VUID-vkDestroyQueryPool-queryPool-00795\"",
+            "bufferView-compatalloc": "\"VUID-vkDestroyBufferView-bufferView-00937\"",
+            "bufferView-nullalloc": "\"VUID-vkDestroyBufferView-bufferView-00938\"",
+            "surface-compatalloc": "\"VUID-vkDestroySurfaceKHR-surface-01267\"",
+            "surface-nullalloc": "\"VUID-vkDestroySurfaceKHR-surface-01268\"",
+            "framebuffer-compatalloc": "\"VUID-vkDestroyFramebuffer-framebuffer-00893\"",
+            "framebuffer-nullalloc": "\"VUID-vkDestroyFramebuffer-framebuffer-00894\"",
            }
 
         # Commands shadowed by interface functions and are not implemented
@@ -219,9 +242,8 @@ class ObjectTrackerOutputGenerator(OutputGenerator):
         self.headerVersion = None
         # Internal state - accumulators for different inner block text
         self.sections = dict([(section, []) for section in self.ALL_SECTIONS])
-        self.cmdMembers = []
-        self.cmd_feature_protect = []  # Save ifdef's for each command
-        self.cmd_info_data = []        # Save the cmdinfo data for validating the handles when processing is complete
+        self.cmd_list = []             # list of commands processed to maintain ordering
+        self.cmd_info_dict = {}        # Per entry-point data for code generation and validation
         self.structMembers = []        # List of StructMemberData records for all Vulkan structs
         self.extension_structs = []    # List of all structs or sister-structs containing handles
                                        # A sister-struct may contain no handles but shares <validextensionstructs> with one that does
@@ -229,32 +251,12 @@ class ObjectTrackerOutputGenerator(OutputGenerator):
         self.struct_member_dict = dict()
         # Named tuples to store struct and command data
         self.StructType = namedtuple('StructType', ['name', 'value'])
-        self.CmdMemberData = namedtuple('CmdMemberData', ['name', 'members'])
-        self.CmdInfoData = namedtuple('CmdInfoData', ['name', 'cmdinfo'])
-        self.CmdExtraProtect = namedtuple('CmdExtraProtect', ['name', 'extra_protect'])
-        self.CommandParam = namedtuple('CommandParam', ['type', 'name', 'ispointer', 'isconst', 'isoptional', 'iscount', 'len', 'extstructs', 'cdecl', 'islocal', 'iscreate', 'isdestroy', 'feature_protect'])
+        self.CmdInfoData = namedtuple('CmdInfoData', ['name', 'cmdinfo', 'members', 'extra_protect', 'alias', 'iscreate', 'isdestroy', 'allocator'])
+        self.CommandParam = namedtuple('CommandParam', ['type', 'name', 'isconst', 'isoptional', 'iscount', 'iscreate', 'len', 'extstructs', 'cdecl', 'islocal'])
         self.StructMemberData = namedtuple('StructMemberData', ['name', 'members'])
         self.object_types = []         # List of all handle types
         self.valid_vuids = set()       # Set of all valid VUIDs
-        self.vuid_file = None
-        # Cover cases where file is built from scripts directory, Lin/Win, or Android build structure
-        # Set cwd to the script directory to more easily locate the header.
-        previous_dir = os.getcwd()
-        os.chdir(os.path.dirname(sys.argv[0]))
-        vuid_filename_locations = [
-            './vk_validation_error_messages.h',
-            '../layers/vk_validation_error_messages.h',
-            '../../layers/vk_validation_error_messages.h',
-            '../../../layers/vk_validation_error_messages.h',
-            ]
-        for vuid_filename in vuid_filename_locations:
-            if os.path.isfile(vuid_filename):
-                self.vuid_file = open(vuid_filename, "r", encoding="utf8")
-                break
-        if self.vuid_file == None:
-            print("Error: Could not find vk_validation_error_messages.h")
-            sys.exit(1)
-        os.chdir(previous_dir)
+        self.vuid_dict = dict()        # VUID dictionary (from JSON)
     #
     # Check if the parameter passed in is optional
     def paramIsOptional(self, param):
@@ -276,25 +278,27 @@ class ObjectTrackerOutputGenerator(OutputGenerator):
                     else:
                         print('Unrecognized len attribute value',val)
                 isoptional = opts
+        if not isoptional:
+            # Matching logic in parameter validation and ValidityOutputGenerator.isHandleOptional
+            optString = param.attrib.get('noautovalidity')
+            if optString and optString == 'true':
+                isoptional = True;
         return isoptional
     #
-    # Convert decimal number to 8 digit hexadecimal lower-case representation
-    def IdToHex(self, dec_num):
-        if dec_num > 4294967295:
-            print ("ERROR: Decimal # %d can't be represented in 8 hex digits" % (dec_num))
-            sys.exit()
-        hex_num = hex(dec_num)
-        return hex_num[2:].zfill(8)
-    #
     # Get VUID identifier from implicit VUID tag
-    def GetVuid(self, vuid_string):
+    def GetVuid(self, parent, suffix):
+        vuid_string = 'VUID-%s-%s' % (parent, suffix)
+        vuid = "kVUIDUndefined"
         if '->' in vuid_string:
-           return "VALIDATION_ERROR_UNDEFINED"
-        vuid_num = self.IdToHex(convertVUID(vuid_string))
-        if vuid_num in self.valid_vuids:
-            vuid = "VALIDATION_ERROR_%s" % vuid_num
+           return vuid
+        if vuid_string in self.valid_vuids:
+            vuid = "\"%s\"" % vuid_string
         else:
-            vuid = "VALIDATION_ERROR_UNDEFINED"
+            alias =  self.cmd_info_dict[parent].alias if parent in self.cmd_info_dict else None
+            if alias:
+                alias_string = 'VUID-%s-%s' % (alias, suffix)
+                if alias_string in self.valid_vuids:
+                    vuid = "\"%s\"" % vuid_string
         return vuid
     #
     # Increases indent by 4 spaces and tracks it globally
@@ -317,31 +321,65 @@ class ObjectTrackerOutputGenerator(OutputGenerator):
     # Check if the parameter passed in is a pointer to an array
     def paramIsArray(self, param):
         return param.attrib.get('len') is not None
+
     #
     # Generate the object tracker undestroyed object validation function
     def GenReportFunc(self):
         output_func = ''
-        output_func += 'void ReportUndestroyedObjects(VkDevice device, enum UNIQUE_VALIDATION_ERROR_CODE error_code) {\n'
+        output_func += 'void ReportUndestroyedObjects(VkDevice device, const std::string& error_code) {\n'
         output_func += '    DeviceReportUndestroyedObjects(device, kVulkanObjectTypeCommandBuffer, error_code);\n'
         for handle in self.object_types:
             if self.isHandleTypeNonDispatchable(handle):
                 output_func += '    DeviceReportUndestroyedObjects(device, %s, error_code);\n' % (self.GetVulkanObjType(handle))
         output_func += '}\n'
         return output_func
+
+    #
+    # Generate the object tracker undestroyed object destruction function
+    def GenDestroyFunc(self):
+        output_func = ''
+        output_func += 'void DestroyUndestroyedObjects(VkDevice device) {\n'
+        output_func += '    DeviceDestroyUndestroyedObjects(device, kVulkanObjectTypeCommandBuffer);\n'
+        for handle in self.object_types:
+            if self.isHandleTypeNonDispatchable(handle):
+                output_func += '    DeviceDestroyUndestroyedObjects(device, %s);\n' % (self.GetVulkanObjType(handle))
+        output_func += '}\n'
+        return output_func
+
+    #
+    # Walk the JSON-derived dict and find all "vuid" key values
+    def ExtractVUIDs(self, d):
+        if hasattr(d, 'items'):
+            for k, v in d.items():
+                if k == "vuid":
+                    yield v
+                elif isinstance(v, dict):
+                    for s in self.ExtractVUIDs(v):
+                        yield s
+                elif isinstance (v, list):
+                    for l in v:
+                        for s in self.ExtractVUIDs(l):
+                            yield s
+
     #
     # Called at beginning of processing as file is opened
     def beginFile(self, genOpts):
         OutputGenerator.beginFile(self, genOpts)
-        # Open vk_validation_error_messages.h file to verify computed VUIDs
-        for line in self.vuid_file:
-            # Grab hex number from enum definition
-            vuid_list = line.split('0x')
-            # If this is a valid enumeration line, remove trailing comma and CR
-            if len(vuid_list) == 2:
-                vuid_num = vuid_list[1][:-2]
-                # Make sure this is a good hex number before adding to set
-                if len(vuid_num) == 8 and all(c in string.hexdigits for c in vuid_num):
-                    self.valid_vuids.add(vuid_num)
+
+        self.valid_usage_path = genOpts.valid_usage_path
+        vu_json_filename = os.path.join(self.valid_usage_path + os.sep, 'validusage.json')
+        if os.path.isfile(vu_json_filename):
+            json_file = open(vu_json_filename, 'r')
+            self.vuid_dict = json.load(json_file)
+            json_file.close()
+        if len(self.vuid_dict) == 0:
+            print("Error: Could not find, or error loading %s/validusage.json\n", vu_json_filename)
+            sys.exit(1)
+
+        # Build a set of all vuid text strings found in validusage.json
+        for json_vuid_string in self.ExtractVUIDs(self.vuid_dict):
+            self.valid_vuids.add(json_vuid_string)
+
         # File Comment
         file_comment = '// *** THIS FILE IS GENERATED - DO NOT EDIT ***\n'
         file_comment += '// See object_tracker_generator.py for modifications\n'
@@ -351,10 +389,10 @@ class ObjectTrackerOutputGenerator(OutputGenerator):
         copyright += '\n'
         copyright += '/***************************************************************************\n'
         copyright += ' *\n'
-        copyright += ' * Copyright (c) 2015-2017 The Khronos Group Inc.\n'
-        copyright += ' * Copyright (c) 2015-2017 Valve Corporation\n'
-        copyright += ' * Copyright (c) 2015-2017 LunarG, Inc.\n'
-        copyright += ' * Copyright (c) 2015-2017 Google Inc.\n'
+        copyright += ' * Copyright (c) 2015-2018 The Khronos Group Inc.\n'
+        copyright += ' * Copyright (c) 2015-2018 Valve Corporation\n'
+        copyright += ' * Copyright (c) 2015-2018 LunarG, Inc.\n'
+        copyright += ' * Copyright (c) 2015-2018 Google Inc.\n'
         copyright += ' *\n'
         copyright += ' * Licensed under the Apache License, Version 2.0 (the "License");\n'
         copyright += ' * you may not use this file except in compliance with the License.\n'
@@ -369,6 +407,7 @@ class ObjectTrackerOutputGenerator(OutputGenerator):
         copyright += ' * limitations under the License.\n'
         copyright += ' *\n'
         copyright += ' * Author: Mark Lobodzinski <mark@lunarg.com>\n'
+        copyright += ' * Author: Dave Houlton <daveh@lunarg.com>\n'
         copyright += ' *\n'
         copyright += ' ****************************************************************************/\n'
         write(copyright, file=self.outFile)
@@ -387,8 +426,12 @@ class ObjectTrackerOutputGenerator(OutputGenerator):
         # Build undestroyed objects reporting function
         report_func = self.GenReportFunc()
         self.newline()
+        # Build undestroyed objects destruction function
+        destroy_func = self.GenDestroyFunc()
+        self.newline()
         write('// ObjectTracker undestroyed objects validation function', file=self.outFile)
         write('%s' % report_func, file=self.outFile)
+        write('%s' % destroy_func, file=self.outFile)
         # Actually write the interface to the output file.
         if (self.emit):
             self.newline()
@@ -396,9 +439,6 @@ class ObjectTrackerOutputGenerator(OutputGenerator):
                 write('#ifdef', self.featureExtraProtect, file=self.outFile)
             # Write the object_tracker code to the file
             if (self.sections['command']):
-                if (self.genOpts.protectProto):
-                    write(self.genOpts.protectProto,
-                          self.genOpts.protectProtoStr, file=self.outFile)
                 write('\n'.join(self.sections['command']), end=u'', file=self.outFile)
             if (self.featureExtraProtect != None):
                 write('\n#endif //', self.featureExtraProtect, file=self.outFile)
@@ -420,8 +460,9 @@ class ObjectTrackerOutputGenerator(OutputGenerator):
         # Start processing in superclass
         OutputGenerator.beginFeature(self, interface, emit)
         self.headerVersion = None
+        self.featureExtraProtect = GetFeatureProtect(interface)
 
-        if self.featureName != 'VK_VERSION_1_0':
+        if self.featureName != 'VK_VERSION_1_0' and self.featureName != 'VK_VERSION_1_1':
             white_list_entry = []
             if (self.featureExtraProtect != None):
                 white_list_entry += [ '#ifdef %s' % self.featureExtraProtect ]
@@ -440,14 +481,14 @@ class ObjectTrackerOutputGenerator(OutputGenerator):
         OutputGenerator.endFeature(self)
     #
     # Process enums, structs, etc.
-    def genType(self, typeinfo, name):
-        OutputGenerator.genType(self, typeinfo, name)
+    def genType(self, typeinfo, name, alias):
+        OutputGenerator.genType(self, typeinfo, name, alias)
         typeElem = typeinfo.elem
         # If the type is a struct type, traverse the imbedded <member> tags generating a structure.
         # Otherwise, emit the tag text.
         category = typeElem.get('category')
         if (category == 'struct' or category == 'union'):
-            self.genStruct(typeinfo, name)
+            self.genStruct(typeinfo, name, alias)
         if category == 'handle':
             self.object_types.append(name)
     #
@@ -528,8 +569,8 @@ class ObjectTrackerOutputGenerator(OutputGenerator):
     # <member> tags instead of freeform C type declarations. The <member> tags are just like
     # <param> tags - they are a declaration of a struct or union member. Only simple member
     # declarations are supported (no nested structs etc.)
-    def genStruct(self, typeinfo, typeName):
-        OutputGenerator.genStruct(self, typeinfo, typeName)
+    def genStruct(self, typeinfo, typeName, alias):
+        OutputGenerator.genStruct(self, typeinfo, typeName, alias)
         members = typeinfo.elem.findall('.//member')
         # Iterate over members once to get length parameters for arrays
         lens = set()
@@ -561,7 +602,6 @@ class ObjectTrackerOutputGenerator(OutputGenerator):
             extstructs = member.attrib.get('validextensionstructs') if name == 'pNext' else None
             membersInfo.append(self.CommandParam(type=type,
                                                  name=name,
-                                                 ispointer=self.paramIsPointer(member),
                                                  isconst=True if 'const' in cdecl else False,
                                                  isoptional=self.paramIsOptional(member),
                                                  iscount=True if name in lens else False,
@@ -569,9 +609,7 @@ class ObjectTrackerOutputGenerator(OutputGenerator):
                                                  extstructs=extstructs,
                                                  cdecl=cdecl,
                                                  islocal=False,
-                                                 iscreate=False,
-                                                 isdestroy=False,
-                                                 feature_protect=self.featureExtraProtect))
+                                                 iscreate=False))
         self.structMembers.append(self.StructMemberData(name=typeName, members=membersInfo))
     #
     # Insert a lock_guard line
@@ -615,7 +653,7 @@ class ObjectTrackerOutputGenerator(OutputGenerator):
         return object_list
     #
     # Construct list of extension structs containing handles, or extension structs that share a <validextensionstructs>
-    # tag WITH an extension struct containing handles. 
+    # tag WITH an extension struct containing handles.
     def GenerateCommandWrapExtensionList(self):
         for struct in self.structMembers:
             if (len(struct.members) > 1) and struct.members[1].extstructs is not None:
@@ -647,7 +685,7 @@ class ObjectTrackerOutputGenerator(OutputGenerator):
         return 'instance' if type in ['VkInstance', 'VkPhysicalDevice'] else 'device'
     #
     # Generate source for creating a Vulkan object
-    def generate_create_object_code(self, indent, proto, params, cmd_info):
+    def generate_create_object_code(self, indent, proto, params, cmd_info, allocator):
         create_obj_code = ''
         handle_type = params[-1].find('type')
         if self.isHandleTypeObject(handle_type.text):
@@ -664,7 +702,7 @@ class ObjectTrackerOutputGenerator(OutputGenerator):
                 create_obj_code += '%sfor (uint32_t index = 0; index < %s; index++) {\n' % (indent, cmd_info[-1].len)
                 indent = self.incIndent(indent)
                 object_dest = '%s[index]' % cmd_info[-1].name
-            create_obj_code += '%sCreateObject(%s, %s, %s, pAllocator);\n' % (indent, params[0].find('name').text, object_dest, self.GetVulkanObjType(cmd_info[-1].type))
+            create_obj_code += '%sCreateObject(%s, %s, %s, %s);\n' % (indent, params[0].find('name').text, object_dest, self.GetVulkanObjType(cmd_info[-1].type), allocator)
             if object_array == True:
                 indent = self.decIndent(indent)
                 create_obj_code += '%s}\n' % indent
@@ -685,8 +723,8 @@ class ObjectTrackerOutputGenerator(OutputGenerator):
                 param = -2
             compatalloc_vuid_string = '%s-compatalloc' % cmd_info[param].name
             nullalloc_vuid_string = '%s-nullalloc' % cmd_info[param].name
-            compatalloc_vuid = self.manual_vuids.get(compatalloc_vuid_string, "VALIDATION_ERROR_UNDEFINED")
-            nullalloc_vuid = self.manual_vuids.get(nullalloc_vuid_string, "VALIDATION_ERROR_UNDEFINED")
+            compatalloc_vuid = self.manual_vuids.get(compatalloc_vuid_string, "kVUIDUndefined")
+            nullalloc_vuid = self.manual_vuids.get(nullalloc_vuid_string, "kVUIDUndefined")
             if self.isHandleTypeObject(cmd_info[param].type) == True:
                 if object_array == True:
                     # This API is freeing an array of handles -- add loop control
@@ -705,22 +743,18 @@ class ObjectTrackerOutputGenerator(OutputGenerator):
         decl_code = ''
         pre_call_code = ''
         post_call_code = ''
-        param_vuid_string = 'VUID-%s-%s-parameter' % (parent_name, obj_name)
-        parent_vuid_string = 'VUID-%s-%s-parent' % (parent_name, obj_name)
-        param_vuid = self.GetVuid(param_vuid_string)
-        parent_vuid = self.GetVuid(parent_vuid_string)
+        param_suffix = '%s-parameter' % (obj_name)
+        parent_suffix = '%s-parent' % (obj_name)
+        param_vuid = self.GetVuid(parent_name, param_suffix)
+        parent_vuid = self.GetVuid(parent_name, parent_suffix)
+
         # If no parent VUID for this member, look for a commonparent VUID
-        if parent_vuid == 'VALIDATION_ERROR_UNDEFINED':
-            commonparent_vuid_string = 'VUID-%s-commonparent' % parent_name
-            parent_vuid = self.GetVuid(commonparent_vuid_string)
+        if parent_vuid == 'kVUIDUndefined':
+            parent_vuid = self.GetVuid(parent_name, 'commonparent')
         if obj_count is not None:
-            pre_call_code += '%s    if (%s%s) {\n' % (indent, prefix, obj_name)
-            indent = self.incIndent(indent)
             pre_call_code += '%s    for (uint32_t %s = 0; %s < %s; ++%s) {\n' % (indent, index, index, obj_count, index)
             indent = self.incIndent(indent)
             pre_call_code += '%s    skip |= ValidateObject(%s, %s%s[%s], %s, %s, %s, %s);\n' % (indent, disp_name, prefix, obj_name, index, self.GetVulkanObjType(obj_type), null_allowed, param_vuid, parent_vuid)
-            indent = self.decIndent(indent)
-            pre_call_code += '%s    }\n' % indent
             indent = self.decIndent(indent)
             pre_call_code += '%s    }\n' % indent
         else:
@@ -756,6 +790,8 @@ class ObjectTrackerOutputGenerator(OutputGenerator):
                 # Structs at first level will have an object
                 if self.struct_contains_object(member.type) == True:
                     struct_info = self.struct_member_dict[member.type]
+                    # TODO (jbolz): Can this use paramIsPointer?
+                    ispointer = '*' in member.cdecl;
                     # Struct Array
                     if member.len is not None:
                         # Update struct prefix
@@ -775,7 +811,7 @@ class ObjectTrackerOutputGenerator(OutputGenerator):
                         indent = self.decIndent(indent)
                         pre_code += '%s    }\n' % indent
                     # Single Struct
-                    else:
+                    elif ispointer:
                         # Update struct prefix
                         new_prefix = '%s%s->' % (prefix, member.name)
                         # Declare safe_VarType for struct
@@ -788,6 +824,15 @@ class ObjectTrackerOutputGenerator(OutputGenerator):
                         post_code += tmp_post
                         indent = self.decIndent(indent)
                         pre_code += '%s    }\n' % indent
+                    else:
+                        # Update struct prefix
+                        new_prefix = '%s%s.' % (prefix, member.name)
+                        # Declare safe_VarType for struct
+                        # Process sub-structs in this struct
+                        (tmp_decl, tmp_pre, tmp_post) = self.validate_objects(struct_info, indent, new_prefix, array_index, create_func, destroy_func, destroy_array, disp_name, member.type, False)
+                        decls += tmp_decl
+                        pre_code += tmp_pre
+                        post_code += tmp_post
         return decls, pre_code, post_code
     #
     # For a particular API, generate the object handling code
@@ -796,16 +841,16 @@ class ObjectTrackerOutputGenerator(OutputGenerator):
         proto = cmd.find('proto/name')
         params = cmd.findall('param')
         if proto.text is not None:
-            cmd_member_dict = dict(self.cmdMembers)
-            cmd_info = cmd_member_dict[proto.text]
+            cmddata = self.cmd_info_dict[proto.text]
+            cmd_info = cmddata.members
             disp_name = cmd_info[0].name
-            # Handle object create operations
-            if cmd_info[0].iscreate:
-                create_obj_code = self.generate_create_object_code(indent, proto, params, cmd_info)
+            # Handle object create operations if last parameter is created by this call
+            if cmddata.iscreate:
+                create_obj_code = self.generate_create_object_code(indent, proto, params, cmd_info, cmddata.allocator)
             else:
                 create_obj_code = ''
             # Handle object destroy operations
-            if cmd_info[0].isdestroy:
+            if cmddata.isdestroy:
                 (destroy_array, destroy_object_code) = self.generate_destroy_object_code(indent, proto, cmd_info)
             else:
                 destroy_array = False
@@ -828,21 +873,29 @@ class ObjectTrackerOutputGenerator(OutputGenerator):
         return paramdecl, param_pre_code, param_post_code
     #
     # Capture command parameter info needed to create, destroy, and validate objects
-    def genCmd(self, cmdinfo, cmdname):
+    def genCmd(self, cmdinfo, cmdname, alias):
 
         # Add struct-member type information to command parameter information
-        OutputGenerator.genCmd(self, cmdinfo, cmdname)
+        OutputGenerator.genCmd(self, cmdinfo, cmdname, alias)
         members = cmdinfo.elem.findall('.//param')
         # Iterate over members once to get length parameters for arrays
         lens = set()
         for member in members:
-            len = self.getLen(member)
-            if len:
-                lens.add(len)
+            length = self.getLen(member)
+            if length:
+                lens.add(length)
         struct_member_dict = dict(self.structMembers)
+
+        # Set command invariant information needed at a per member level in validate...
+        is_create_command = any(filter(lambda pat: pat in cmdname, ('Create', 'Allocate', 'Enumerate', 'RegisterDeviceEvent', 'RegisterDisplayEvent')))
+        last_member_is_pointer = len(members) and self.paramIsPointer(members[-1])
+        iscreate = is_create_command or ('vkGet' in cmdname and last_member_is_pointer)
+        isdestroy = any([destroy_txt in cmdname for destroy_txt in ['Destroy', 'Free']])
+
         # Generate member info
         membersInfo = []
         constains_extension_structs = False
+        allocator = 'nullptr'
         for member in members:
             # Get type and name of member
             info = self.getTypeNameTuple(member)
@@ -851,46 +904,39 @@ class ObjectTrackerOutputGenerator(OutputGenerator):
             cdecl = self.makeCParamDecl(member, 0)
             # Check for parameter name in lens set
             iscount = True if name in lens else False
-            len = self.getLen(member)
+            length = self.getLen(member)
             isconst = True if 'const' in cdecl else False
-            ispointer = self.paramIsPointer(member)
             # Mark param as local if it is an array of objects
             islocal = False;
             if self.isHandleTypeObject(type) == True:
-                if (len is not None) and (isconst == True):
+                if (length is not None) and (isconst == True):
                     islocal = True
             # Or if it's a struct that contains an object
             elif type in struct_member_dict:
                 if self.struct_contains_object(type) == True:
                     islocal = True
-            isdestroy = True if True in [destroy_txt in cmdname for destroy_txt in ['Destroy', 'Free']] else False
-            iscreate = True if True in [create_txt in cmdname for create_txt in ['Create', 'Allocate', 'Enumerate', 'RegisterDeviceEvent', 'RegisterDisplayEvent']] or ('vkGet' in cmdname and member == members[-1] and ispointer == True)  else False
+            if type == 'VkAllocationCallbacks':
+                allocator = name
             extstructs = member.attrib.get('validextensionstructs') if name == 'pNext' else None
             membersInfo.append(self.CommandParam(type=type,
                                                  name=name,
-                                                 ispointer=ispointer,
                                                  isconst=isconst,
                                                  isoptional=self.paramIsOptional(member),
                                                  iscount=iscount,
-                                                 len=len,
+                                                 len=length,
                                                  extstructs=extstructs,
                                                  cdecl=cdecl,
                                                  islocal=islocal,
-                                                 iscreate=iscreate,
-                                                 isdestroy=isdestroy,
-                                                 feature_protect=self.featureExtraProtect))
-        self.cmdMembers.append(self.CmdMemberData(name=cmdname, members=membersInfo))
-        self.cmd_info_data.append(self.CmdInfoData(name=cmdname, cmdinfo=cmdinfo))
-        self.cmd_feature_protect.append(self.CmdExtraProtect(name=cmdname, extra_protect=self.featureExtraProtect))
+                                                 iscreate=iscreate))
+
+        self.cmd_list.append(cmdname)
+        self.cmd_info_dict[cmdname] =self.CmdInfoData(name=cmdname, cmdinfo=cmdinfo, members=membersInfo, iscreate=iscreate, isdestroy=isdestroy, allocator=allocator, extra_protect=self.featureExtraProtect, alias=alias)
     #
     # Create code Create, Destroy, and validate Vulkan objects
     def WrapCommands(self):
-        cmd_member_dict = dict(self.cmdMembers)
-        cmd_info_dict = dict(self.cmd_info_data)
-        cmd_protect_dict = dict(self.cmd_feature_protect)
-        for api_call in self.cmdMembers:
-            cmdname = api_call.name
-            cmdinfo = cmd_info_dict[api_call.name]
+        for cmdname in self.cmd_list:
+            cmddata = self.cmd_info_dict[cmdname]
+            cmdinfo = cmddata.cmdinfo
             if cmdname in self.interface_functions:
                 continue
             if cmdname in self.no_autogen_list:
@@ -905,7 +951,7 @@ class ObjectTrackerOutputGenerator(OutputGenerator):
             # If API doesn't contain any object handles, don't fool with it
             if not api_decls and not api_pre and not api_post:
                 continue
-            feature_extra_protect = cmd_protect_dict[api_call.name]
+            feature_extra_protect = cmddata.extra_protect
             if (feature_extra_protect != None):
                 self.appendSection('command', '')
                 self.appendSection('command', '#ifdef '+ feature_extra_protect)
@@ -936,9 +982,13 @@ class ObjectTrackerOutputGenerator(OutputGenerator):
             # Pull out the text for each of the parameters, separate them by commas in a list
             paramstext = ', '.join([str(param.text) for param in params])
             # Use correct dispatch table
-            disp_type = cmdinfo.elem.find('param/type').text
             disp_name = cmdinfo.elem.find('param/name').text
-            dispatch_table = 'get_dispatch_table(ot_%s_table_map, %s)->' % (self.GetDispType(disp_type), disp_name)
+            disp_type = cmdinfo.elem.find('param/type').text
+            if disp_type in ["VkInstance", "VkPhysicalDevice"] or cmdname == 'vkCreateInstance':
+                object_type = 'instance'
+            else:
+                object_type = 'device'
+            dispatch_table = 'GetLayerDataPtr(get_dispatch_key(%s), layer_data_map)->%s_dispatch_table.' % (disp_name, object_type)
             API = cmdinfo.elem.attrib.get('name').replace('vk', dispatch_table, 1)
             # Put all this together for the final down-chain call
             if assignresult != '':

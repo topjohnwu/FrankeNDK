@@ -14,6 +14,8 @@
 # limitations under the License.
 #
 """Extracts values from the AndroidManifest.xml file."""
+from __future__ import print_function
+
 import argparse
 import os.path
 import xml.etree.ElementTree
@@ -95,9 +97,9 @@ def main():
 
     tree = xml.etree.ElementTree.parse(args.manifest_file)
     if args.property == 'minSdkVersion':
-        print get_minsdkversion(tree.getroot())
+        print(get_minsdkversion(tree.getroot()))
     elif args.property == 'debuggable':
-        print get_debuggable(tree.getroot())
+        print(get_debuggable(tree.getroot()))
     else:
         raise ValueError
 
